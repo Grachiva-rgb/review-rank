@@ -99,6 +99,16 @@ export default function ResultsClient({
               </svg>
               Home
             </Link>
+            <Link
+              href="/saved"
+              className="hidden sm:inline-flex items-center gap-1 text-xs text-[#7A6B63] hover:text-[#8B5E3C] transition-colors flex-shrink-0"
+            >
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Saved
+            </Link>
 
             {/* Desktop: full compact search form */}
             <div className="hidden sm:flex flex-1 justify-end min-w-0 overflow-hidden">

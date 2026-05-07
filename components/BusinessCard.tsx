@@ -4,6 +4,7 @@ import { BusinessCategory, getTrustTierFromRRS, getTrustTierLabel, getTrustTierS
 import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
 import QuoteButton from './QuoteButton';
+import SaveButton from './SaveButton';
 
 interface BusinessCardProps {
   place: Place;
@@ -161,9 +162,21 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
         </div>
       </div>
 
-      {/* Review Rank Score (0–100) */}
-      <div className="flex-shrink-0 self-center">
+      {/* Score + save */}
+      <div className="flex-shrink-0 self-center flex flex-col items-center gap-2">
         <SmartScoreBadge score={place.review_rank_score} />
+        <SaveButton
+          size="sm"
+          business={{
+            placeId: place.place_id,
+            name: place.name,
+            rating: place.rating,
+            reviewCount: place.user_ratings_total,
+            score: place.review_rank_score,
+            address: place.formatted_address,
+            category: category,
+          }}
+        />
       </div>
     </div>
   );

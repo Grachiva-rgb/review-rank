@@ -2,6 +2,7 @@
 
 import { useState, useRef, FormEvent, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSearchHistory, useLastLocation } from '@/hooks/useSearchHistory';
 
 interface LocationSuggestion {
   label: string;
@@ -20,25 +21,36 @@ export default function SearchForm({
   variant = 'hero',
 }: SearchFormProps) {
   const router = useRouter();
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsError, setGpsError] = useState('');
-  const [submitError, setSubmitError] = useState('');
-  const [locationValue, setLocationValue] = useState(defaultLocation);
-  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
-  const gpsDeniedRef = useRef(false);
+  const lastLocation = useLastLocation();
+  const { recents, saveSearch } = useSearchHistory();
 
-  // Refs to read current input values without controlled state
-  const categoryRef = useRef<HTMLInputElement>(null);
-  const locationRef = useRef<HTMLInputElement>(null);
+  const [gpsLoading, setGpsLoading]     = useState(false);
+  const [gpsError, setGpsError]         = useState('');
+  const [submitError, setSubmitError]   = useState('');
+  const [locationValue, setLocationValue] = useState(defaultLocation);
+  const [suggestions, setSuggestions]   = useState<LocationSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex]   = useState(-1);
+  const [showRecents, setShowRecents]   = useState(false);
+  const [gpsCoords, setGpsCoords]       = useState<{ lat: number; lng: number } | null>(null);
+
+  const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const gpsDeniedRef   = useRef(false);
+  const categoryRef    = useRef<HTMLInputElement>(null);
+  const locationRef    = useRef<HTMLInputElement>(null);
+
+  // Pre-populate location from last search when no default is provided
+  useEffect(() => {
+    if (!defaultLocation && lastLocation) {
+      setLocationValue(lastLocation);
+    }
+  }, [lastLocation, defaultLocation]);
 
   const fetchSuggestions = useCallback(async (q: string) => {
     if (q.length < 2) { setSuggestions([]); return; }
     try {
-      const res = await fetch(`/api/location-autocomplete?q=${encodeURIComponent(q)}`);
+      const res  = await fetch(`/api/location-autocomplete?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setSuggestions(data);
       setShowSuggestions(data.length > 0);
@@ -80,22 +92,18 @@ export default function SearchForm({
     }
   };
 
-  // Clear all errors when the chip/category changes
   useEffect(() => {
     setSubmitError('');
     setGpsError('');
   }, [defaultCategory]);
 
-  // When a chip is clicked with no location, auto-trigger GPS silently
-  // If GPS was already denied, just focus location field with no error
   useEffect(() => {
     if (defaultCategory && !defaultLocation) {
       const t = setTimeout(() => {
         if (gpsDeniedRef.current) {
-          // GPS already blocked — just focus location, no error
           locationRef.current?.focus();
         } else {
-          handleGps(true); // silent = true: no error shown on chip auto-trigger
+          handleGps(true);
         }
       }, 200);
       return () => clearTimeout(t);
@@ -106,9 +114,10 @@ export default function SearchForm({
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setShowSuggestions(false);
+    setShowRecents(false);
     const data = new FormData(e.currentTarget);
-    const cat = (data.get('category') as string || '').trim();
-    const loc = locationValue.trim();
+    const cat  = (data.get('category') as string || '').trim();
+    const loc  = locationValue.trim();
 
     if (!cat) {
       setSubmitError('Please enter a business type to search.');
@@ -119,6 +128,9 @@ export default function SearchForm({
       return;
     }
     setSubmitError('');
+
+    // Persist to history
+    saveSearch(cat, gpsCoords ? 'Current location' : loc);
 
     if (gpsCoords) {
       router.push(
@@ -132,8 +144,12 @@ export default function SearchForm({
     }
   };
 
-  // Lat/lng stored when GPS is used — passed as hidden fields on submit
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const applyRecentSearch = (category: string, location: string) => {
+    if (categoryRef.current) categoryRef.current.value = category;
+    setLocationValue(location);
+    setShowRecents(false);
+    setGpsCoords(null);
+  };
 
   const handleGps = async (silent = false) => {
     setGpsError('');
@@ -172,7 +188,6 @@ export default function SearchForm({
       setLocationValue('Current location');
       setGpsLoading(false);
       setGpsError('');
-      // Focus category if empty, otherwise leave focus alone
       if (!categoryRef.current?.value) categoryRef.current?.focus();
     } catch (err: unknown) {
       setGpsLoading(false);
@@ -180,13 +195,9 @@ export default function SearchForm({
       const code = (err as { code?: number }).code;
       if (code === 1) {
         gpsDeniedRef.current = true;
-        if (!silent) {
-          setGpsError('Location access denied — type your city below.');
-        }
+        if (!silent) setGpsError('Location access denied — type your city below.');
       } else {
-        if (!silent) {
-          setGpsError('Could not get your location — type your city below.');
-        }
+        if (!silent) setGpsError('Could not get your location — type your city below.');
       }
       locationRef.current?.focus();
     }
@@ -199,20 +210,69 @@ export default function SearchForm({
     </svg>
   );
 
+  const GpsIcon = () => (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+
+  // Shared recent-searches dropdown
+  const RecentsDropdown = ({ wide = false }: { wide?: boolean }) =>
+    showRecents && recents.length > 0 ? (
+      <div
+        className={`absolute z-50 left-0 top-full mt-1 bg-white border border-[#D9CEC8] rounded-xl shadow-lg overflow-hidden ${wide ? 'w-72' : 'w-56'}`}
+      >
+        <div className="px-3 py-2 border-b border-[#EDE8E3] flex items-center justify-between">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-[#9A8C85]">Recent searches</span>
+          <button
+            type="button"
+            onClick={() => setShowRecents(false)}
+            className="text-[#9A8C85] hover:text-[#5A4A3F] text-xs"
+          >
+            ✕
+          </button>
+        </div>
+        {recents.map((s, i) => (
+          <button
+            key={i}
+            type="button"
+            onMouseDown={() => applyRecentSearch(s.category, s.location)}
+            className="w-full text-left px-3 py-2.5 text-sm text-[#241C15] hover:bg-[#FAF7F0] transition-colors flex items-center gap-2"
+          >
+            <svg className="h-3 w-3 text-[#9A8C85] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="truncate">
+              <span className="font-medium">{s.category}</span>
+              <span className="text-[#7A6B63]"> in {s.location}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   if (variant === 'compact') {
     return (
       <div className="flex flex-col gap-1">
         <form action="/results" method="GET" onSubmit={handleSubmit} className="flex flex-wrap items-center gap-1.5">
-          <input
-            ref={categoryRef}
-            name="category"
-            type="text"
-            required
-            defaultValue={defaultCategory}
-            placeholder="Business type"
-            maxLength={100}
-            className="min-w-0 w-28 rounded-lg border border-[#D9CEC8] bg-white px-3 py-2 text-sm text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/50 focus:outline-none focus:ring-1 focus:ring-[#8B5E3C]/20"
-          />
+          <div className="relative">
+            <input
+              ref={categoryRef}
+              name="category"
+              type="text"
+              required
+              defaultValue={defaultCategory}
+              placeholder="Business type"
+              maxLength={100}
+              onFocus={() => recents.length > 0 && setShowRecents(true)}
+              onBlur={() => setTimeout(() => setShowRecents(false), 150)}
+              className="min-w-0 w-28 rounded-lg border border-[#D9CEC8] bg-white px-3 py-2 text-sm text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/50 focus:outline-none focus:ring-1 focus:ring-[#8B5E3C]/20"
+            />
+            <RecentsDropdown />
+          </div>
           <span className="text-[#7A6B63] text-sm">in</span>
           <div className="relative">
             <input
@@ -252,14 +312,7 @@ export default function SearchForm({
             title="Use my location"
             className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg border border-[#D9CEC8] bg-white text-[#7A6B63] hover:text-[#8B5E3C] hover:border-[#8B5E3C]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {gpsLoading ? <SpinnerIcon /> : (
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            )}
+            {gpsLoading ? <SpinnerIcon /> : <GpsIcon />}
           </button>
           <button
             type="submit"
@@ -279,7 +332,8 @@ export default function SearchForm({
   return (
     <form action="/results" method="GET" onSubmit={handleSubmit} className="w-full max-w-2xl">
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
+        {/* Category input with recent searches */}
+        <div className="flex-1 relative">
           <label className="block text-xs text-[#7A6B63] mb-1.5 uppercase tracking-widest font-mono">
             Business Type
           </label>
@@ -292,10 +346,15 @@ export default function SearchForm({
             placeholder="mechanic, dentist, plumber, HVAC..."
             maxLength={100}
             autoComplete="off"
+            onFocus={() => recents.length > 0 && setShowRecents(true)}
+            onBlur={() => setTimeout(() => setShowRecents(false), 150)}
+            onChange={() => { setSubmitError(''); }}
             className="w-full rounded-xl border border-[#D9CEC8] bg-white px-4 py-3.5 text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/60 focus:outline-none focus:ring-2 focus:ring-[#8B5E3C]/15 transition-all shadow-sm"
           />
+          <RecentsDropdown wide />
         </div>
 
+        {/* Location input with autocomplete */}
         <div className="sm:w-52 relative">
           <label className="block text-xs text-[#7A6B63] mb-1.5 uppercase tracking-widest font-mono">
             Location

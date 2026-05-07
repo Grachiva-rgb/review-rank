@@ -6,6 +6,7 @@ import SmartScoreBadge from '@/components/SmartScoreBadge';
 import BackButton from '@/components/BackButton';
 import NavLogo from '@/components/NavLogo';
 import ClientTracker from '@/components/ClientTracker';
+import SaveButton from '@/components/SaveButton';
 import {
   detectCategory,
   getTrustTierFromRRS,
@@ -212,8 +213,19 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
               )}
             </div>
 
-            <div className="sm:flex-shrink-0 flex justify-center sm:justify-start">
+            <div className="sm:flex-shrink-0 flex flex-col items-center gap-3">
               <SmartScoreBadge score={place.review_rank_score} size="lg" />
+              <SaveButton
+                business={{
+                  placeId: place.place_id,
+                  name: place.name,
+                  rating: place.rating,
+                  reviewCount: place.user_ratings_total,
+                  score: place.review_rank_score,
+                  address: place.formatted_address ?? '',
+                  category: cat ?? '',
+                }}
+              />
             </div>
           </div>
 

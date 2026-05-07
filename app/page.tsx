@@ -82,10 +82,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <nav className="px-6 py-4 border-b border-[#EDE8E3]">
           <div className="flex items-center justify-between">
             <NavLogo />
-            <div className="flex items-center gap-2 text-xs text-[#7A6B63]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#2F6F4E]" />
-              <span className="hidden sm:inline">No paid rankings · Based on public review signals</span>
-              <span className="sm:hidden">No paid rankings</span>
+            <div className="flex items-center gap-4">
+              <Link href="/saved" className="text-xs text-[#7A6B63] hover:text-[#8B5E3C] transition-colors flex items-center gap-1">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                Saved
+              </Link>
+              <div className="flex items-center gap-2 text-xs text-[#7A6B63]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#2F6F4E]" />
+                <span className="hidden sm:inline">No paid rankings · Based on public review signals</span>
+                <span className="sm:hidden">No paid rankings</span>
+              </div>
             </div>
           </div>
         </nav>
