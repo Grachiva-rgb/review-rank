@@ -63,6 +63,9 @@ export const metadata: Metadata = {
     description: 'Find trusted local businesses ranked by review quality and volume.',
     images: ['/opengraph-image'],
   },
+  verification: {
+    google: 'FRBA8e2k377TVHQpz1_YRgl-dH5E0HYF7Yvprpug_Zs',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
