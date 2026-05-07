@@ -29,6 +29,7 @@ export default function SearchForm({
   const [activeIndex, setActiveIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const gpsDeniedRef = useRef(false);
 
   // Refs to read current input values without controlled state
   const categoryRef = useRef<HTMLInputElement>(null);
@@ -86,11 +87,17 @@ export default function SearchForm({
   }, [defaultCategory]);
 
   // When a chip is clicked with no location, auto-trigger GPS silently
-  // If GPS is unavailable or denied, focus the location field instead
+  // If GPS was already denied, just focus location field with no error
   useEffect(() => {
     if (defaultCategory && !defaultLocation) {
-      // Small delay so the component has painted first
-      const t = setTimeout(() => handleGps(), 200);
+      const t = setTimeout(() => {
+        if (gpsDeniedRef.current) {
+          // GPS already blocked — just focus location, no error
+          locationRef.current?.focus();
+        } else {
+          handleGps(true); // silent = true: no error shown on chip auto-trigger
+        }
+      }, 200);
       return () => clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +135,7 @@ export default function SearchForm({
   // Lat/lng stored when GPS is used — passed as hidden fields on submit
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const handleGps = async () => {
+  const handleGps = async (silent = false) => {
     setGpsError('');
     setGpsLoading(true);
     setLocationValue('Getting your location…');
@@ -171,11 +178,16 @@ export default function SearchForm({
       setGpsLoading(false);
       setLocationValue('');
       const code = (err as { code?: number }).code;
-      setGpsError(
-        code === 1
-          ? 'Location access denied — type your city below.'
-          : 'Could not get your location — type your city below.'
-      );
+      if (code === 1) {
+        gpsDeniedRef.current = true;
+        if (!silent) {
+          setGpsError('Location access denied — type your city below.');
+        }
+      } else {
+        if (!silent) {
+          setGpsError('Could not get your location — type your city below.');
+        }
+      }
       locationRef.current?.focus();
     }
   };
@@ -235,7 +247,7 @@ export default function SearchForm({
           </div>
           <button
             type="button"
-            onClick={handleGps}
+            onClick={() => handleGps()}
             disabled={gpsLoading}
             title="Use my location"
             className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg border border-[#D9CEC8] bg-white text-[#7A6B63] hover:text-[#8B5E3C] hover:border-[#8B5E3C]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
@@ -343,7 +355,7 @@ export default function SearchForm({
         </p>
         <button
           type="button"
-          onClick={handleGps}
+          onClick={() => handleGps()}
           disabled={gpsLoading}
           className="text-sm text-[#8B5E3C] hover:text-[#6B4A2F] underline underline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] flex items-center"
         >
