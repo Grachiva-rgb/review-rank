@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useRef, FormEvent, useEffect } from 'react';
+import { useState, useRef, FormEvent, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+
+interface LocationSuggestion {
+  label: string;
+  placeId: string;
+}
 
 interface SearchFormProps {
   defaultLocation?: string;
@@ -18,10 +23,58 @@ export default function SearchForm({
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [locationValue, setLocationValue] = useState(defaultLocation);
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Refs to read current input values without controlled state
   const categoryRef = useRef<HTMLInputElement>(null);
   const locationRef = useRef<HTMLInputElement>(null);
+
+  const fetchSuggestions = useCallback(async (q: string) => {
+    if (q.length < 2) { setSuggestions([]); return; }
+    try {
+      const res = await fetch(`/api/location-autocomplete?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setSuggestions(data);
+      setShowSuggestions(data.length > 0);
+      setActiveIndex(-1);
+    } catch {
+      setSuggestions([]);
+    }
+  }, []);
+
+  const handleLocationChange = (val: string) => {
+    setLocationValue(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 280);
+  };
+
+  const selectSuggestion = (label: string) => {
+    setLocationValue(label);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setActiveIndex(-1);
+  };
+
+  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[activeIndex].label);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
 
   // When a suggested search chip pre-fills category with no location, prompt immediately
   useEffect(() => {
@@ -33,9 +86,10 @@ export default function SearchForm({
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setShowSuggestions(false);
     const data = new FormData(e.currentTarget);
     const cat = (data.get('category') as string || '').trim();
-    const loc = (data.get('location') as string || '').trim();
+    const loc = locationValue.trim();
 
     if (!cat) {
       setSubmitError('Please enter a business type to search.');
@@ -95,6 +149,7 @@ export default function SearchForm({
       }
 
       setGpsLoading(false);
+      setLocationValue('current location');
       router.push(
         `/results?category=${encodeURIComponent(cat)}&lat=${latitude}&lng=${longitude}&location=current+location`
       );
@@ -131,16 +186,37 @@ export default function SearchForm({
             className="min-w-0 w-28 rounded-lg border border-[#D9CEC8] bg-white px-3 py-2 text-sm text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/50 focus:outline-none focus:ring-1 focus:ring-[#8B5E3C]/20"
           />
           <span className="text-[#7A6B63] text-sm">in</span>
-          <input
-            ref={locationRef}
-            name="location"
-            type="text"
-            defaultValue={defaultLocation}
-            placeholder="City or zip"
-            maxLength={100}
-            suppressHydrationWarning
-            className="min-w-0 w-24 rounded-lg border border-[#D9CEC8] bg-white px-3 py-2 text-sm text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/50 focus:outline-none focus:ring-1 focus:ring-[#8B5E3C]/20"
-          />
+          <div className="relative">
+            <input
+              ref={locationRef}
+              name="location"
+              type="text"
+              value={locationValue}
+              onChange={e => handleLocationChange(e.target.value)}
+              onKeyDown={handleLocationKeyDown}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="City or zip"
+              maxLength={100}
+              autoComplete="off"
+              suppressHydrationWarning
+              className="min-w-0 w-24 rounded-lg border border-[#D9CEC8] bg-white px-3 py-2 text-sm text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/50 focus:outline-none focus:ring-1 focus:ring-[#8B5E3C]/20"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-50 left-0 top-full mt-1 w-56 bg-white border border-[#D9CEC8] rounded-xl shadow-lg overflow-hidden">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={s.placeId}
+                    type="button"
+                    onMouseDown={() => selectSuggestion(s.label)}
+                    className={`w-full text-left px-3 py-2 text-sm text-[#241C15] hover:bg-[#FAF7F0] transition-colors ${i === activeIndex ? 'bg-[#FAF7F0]' : ''}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleGps}
@@ -192,7 +268,7 @@ export default function SearchForm({
           />
         </div>
 
-        <div className="sm:w-52">
+        <div className="sm:w-52 relative">
           <label className="block text-xs text-[#7A6B63] mb-1.5 uppercase tracking-widest font-mono">
             Location
           </label>
@@ -200,12 +276,34 @@ export default function SearchForm({
             ref={locationRef}
             name="location"
             type="text"
-            defaultValue={defaultLocation}
-            placeholder="City, zip, or address"
+            value={locationValue}
+            onChange={e => handleLocationChange(e.target.value)}
+            onKeyDown={handleLocationKeyDown}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            placeholder="City or zip code"
             maxLength={100}
+            autoComplete="off"
             suppressHydrationWarning
             className="w-full rounded-xl border border-[#D9CEC8] bg-white px-4 py-3.5 text-[#241C15] placeholder-[#7A6B63] focus:border-[#8B5E3C]/60 focus:outline-none focus:ring-2 focus:ring-[#8B5E3C]/15 transition-all shadow-sm"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              ref={suggestionsRef}
+              className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-[#D9CEC8] rounded-xl shadow-lg overflow-hidden"
+            >
+              {suggestions.map((s, i) => (
+                <button
+                  key={s.placeId}
+                  type="button"
+                  onMouseDown={() => selectSuggestion(s.label)}
+                  className={`w-full text-left px-4 py-2.5 text-sm text-[#241C15] hover:bg-[#FAF7F0] transition-colors ${i === activeIndex ? 'bg-[#FAF7F0]' : ''}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="sm:self-end">
