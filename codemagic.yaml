@@ -1,65 +1,21 @@
 workflows:
 
   # ─────────────────────────────────────────────────────────────────
-  # iOS build → TestFlight / App Store
-  # ─────────────────────────────────────────────────────────────────
-  ios-release:
-    name: iOS Release
-    max_build_duration: 60
-    environment:
-      groups:
-        - reviewrank_credentials   # add this group in Codemagic → Team → Global variables
-      vars:
-        CAPACITOR_SERVER_URL: $VERCEL_URL   # e.g. https://review-rank.vercel.app
-        GOOGLE_PLACES_API_KEY: $GOOGLE_PLACES_API_KEY
-      node: 22.11.0
-      xcode: latest
-      cocoapods: default
-    scripts:
-      - name: Install dependencies
-        script: npm ci
-
-      - name: Create web placeholder for Capacitor
-        script: |
-          # server.url mode: no static build needed, but Capacitor requires webDir to exist
-          mkdir -p out
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://review-rank.vercel.app"></head><body></body></html>' > out/index.html
-
-      - name: Capacitor sync
-        script: npx cap sync ios
-        # Note: Capacitor 8 uses Swift Package Manager — no pod install needed
-
-      - name: Build & sign iOS app
-        script: |
-          xcode-project use-profiles
-          xcode-project build-ipa \
-            --project ios/App/App.xcodeproj \
-            --scheme App
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-
-    publishing:
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        submit_to_testflight: true
-        submit_to_app_store: false   # change to true for direct App Store release
-
-  # ─────────────────────────────────────────────────────────────────
-  # Android build → Google Play
+  # Android build — produces a signed APK you can install directly
+  # or upload to Google Play (requires $25 one-time Play Console fee)
   # ─────────────────────────────────────────────────────────────────
   android-release:
     name: Android Release
     max_build_duration: 60
     environment:
       groups:
-        - reviewrank_credentials
+        - reviewrank_credentials   # Codemagic → Team → Global variables
       vars:
         CAPACITOR_SERVER_URL: $VERCEL_URL
-        GOOGLE_PLACES_API_KEY: $GOOGLE_PLACES_API_KEY
+        KEYSTORE_PATH: /tmp/reviewrank-release.keystore
+        KEY_ALIAS: reviewrank
+        KEY_PASSWORD: reviewrank2024
+        STORE_PASSWORD: reviewrank2024
       node: 22.11.0
       java: 17
     scripts:
@@ -74,51 +30,81 @@ workflows:
       - name: Capacitor sync
         script: npx cap sync android
 
-      - name: Build Android release AAB
+      - name: Generate keystore (first-time only)
         script: |
-          cd android
-          ./gradlew bundleRelease
+          keytool -genkeypair \
+            -alias $KEY_ALIAS \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore $KEYSTORE_PATH \
+            -storepass $STORE_PASSWORD \
+            -keypass $KEY_PASSWORD \
+            -dname "CN=ReviewRank, OU=Mobile, O=ReviewRank, L=Unknown, ST=Unknown, C=US" \
+            -noprompt
 
-      - name: Sign AAB
+      - name: Configure Gradle signing
+        script: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          android.signingConfigs {
+              release {
+                  storeFile file(System.getenv("KEYSTORE_PATH"))
+                  storePassword System.getenv("STORE_PASSWORD")
+                  keyAlias System.getenv("KEY_ALIAS")
+                  keyPassword System.getenv("KEY_PASSWORD")
+              }
+          }
+          android.buildTypes.release.signingConfig = android.signingConfigs.release
+          EOF
+
+      - name: Build signed APK
         script: |
           cd android
-          jarsigner \
-            -verbose \
-            -sigalg SHA256withRSA \
-            -digestalg SHA-256 \
-            -keystore $CM_KEYSTORE_PATH \
-            -storepass $CM_KEYSTORE_PASSWORD \
-            -keypass $CM_KEY_PASSWORD \
-            app/build/outputs/bundle/release/app-release.aab \
-            $CM_KEY_ALIAS
+          ./gradlew assembleRelease
 
     artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/apk/release/app-release.apk
 
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal   # internal → alpha → beta → production
-        submit_as_draft: true
+  # ─────────────────────────────────────────────────────────────────
+  # iOS build — requires Apple Developer Program ($99/year)
+  # Uncomment when you have an Apple Developer account
+  # ─────────────────────────────────────────────────────────────────
+  # ios-release:
+  #   name: iOS Release
+  #   max_build_duration: 60
+  #   environment:
+  #     groups:
+  #       - reviewrank_credentials
+  #     vars:
+  #       CAPACITOR_SERVER_URL: $VERCEL_URL
+  #     node: 22.11.0
+  #     xcode: latest
+  #   scripts:
+  #     - name: Install dependencies
+  #       script: npm ci
+  #     - name: Create web placeholder
+  #       script: mkdir -p out && echo '<html></html>' > out/index.html
+  #     - name: Capacitor sync
+  #       script: npx cap sync ios
+  #     - name: Build & sign iOS app
+  #       script: |
+  #         xcode-project use-profiles
+  #         xcode-project build-ipa \
+  #           --project ios/App/App.xcodeproj \
+  #           --scheme App
+  #   artifacts:
+  #     - build/ios/ipa/*.ipa
+  #   publishing:
+  #     app_store_connect:
+  #       api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+  #       key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+  #       issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+  #       submit_to_testflight: true
 
 # ─────────────────────────────────────────────────────────────────
-# REQUIRED SECRETS — add these in Codemagic → Team → Global variables
-# under the group name "reviewrank_credentials"
+# REQUIRED — add in Codemagic → Team → Global variables
+# group name: "reviewrank_credentials"
 # ─────────────────────────────────────────────────────────────────
 #
-# VERCEL_URL                       https://review-rank.vercel.app
-# GOOGLE_PLACES_API_KEY            your Google Places API key
-#
-# iOS secrets:
-#   APP_STORE_CONNECT_PRIVATE_KEY      contents of .p8 file
-#   APP_STORE_CONNECT_KEY_IDENTIFIER   key ID from App Store Connect
-#   APP_STORE_CONNECT_ISSUER_ID        issuer UUID from App Store Connect
-#   (signing certificate + provisioning profile: upload in Codemagic → Code signing)
-#
-# Android secrets:
-#   CM_KEYSTORE                        base64-encoded keystore file
-#   CM_KEYSTORE_PASSWORD               keystore password
-#   CM_KEY_ALIAS                       key alias
-#   CM_KEY_PASSWORD                    key password
-#   GCLOUD_SERVICE_ACCOUNT_CREDENTIALS JSON key for Google Play API
+# VERCEL_URL          https://review-rank.vercel.app
