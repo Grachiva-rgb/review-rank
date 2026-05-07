@@ -19,11 +19,6 @@ workflows:
       - name: Install dependencies
         script: npm ci
 
-      - name: Set Vercel deployment URL in Capacitor config
-        script: |
-          # Replace placeholder with real URL from env
-          sed -i "s|https://review-rank.vercel.app|$CAPACITOR_SERVER_URL|g" capacitor.config.ts
-
       - name: Capacitor sync
         script: npx cap sync ios
 
@@ -66,10 +61,6 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm ci
-
-      - name: Set Vercel deployment URL
-        script: |
-          sed -i "s|https://review-rank.vercel.app|$CAPACITOR_SERVER_URL|g" capacitor.config.ts
 
       - name: Capacitor sync
         script: npx cap sync android
