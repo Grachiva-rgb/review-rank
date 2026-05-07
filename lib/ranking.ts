@@ -1,35 +1,42 @@
 /**
- * Smart Score = rating × log₁₀(total_reviews + 1)
+ * Smart Score = max(0, rating − 3.0) × log₁₀(total_reviews + 1)
  *
- * Rewards businesses that combine high ratings with meaningful review volume.
- * A 4.9★ with 3 reviews scores lower than a 4.7★ with 2,000 reviews.
- * Inspired by Bayesian rating systems used by IMDb, Yelp, and Angi.
+ * The baseline subtraction (3.0) is key: it means review volume only amplifies
+ * genuinely good ratings. A 3.8★ business with 50k reviews no longer outranks
+ * a 4.9★ business with 500 reviews.
+ *
+ * Without baseline: 3.8 × log(50001) = 17.9 (wrongly beats 4.9★ at 500 reviews)
+ * With baseline:   0.8 × log(50001) = 3.8  (correctly below 1.9 × log(501) = 5.1)
+ *
+ * Max theoretical score ≈ 10 (5★ × millions of reviews → 2.0 × 5.0)
+ * Inspired by adjusted Bayesian systems and the IMDb weighted rating formula.
  */
 export function calculateSmartScore(rating: number, totalReviews: number): number {
   if (!rating || rating <= 0) return 0;
-  const score = rating * Math.log10((totalReviews || 0) + 1);
+  const adjusted = Math.max(0, rating - 3.0);
+  const score = adjusted * Math.log10((totalReviews || 0) + 1);
   return parseFloat(score.toFixed(2));
 }
 
 export function getScoreColor(score: number): string {
-  if (score >= 7) return 'text-emerald-700';
-  if (score >= 5) return 'text-amber-700';
-  if (score >= 3) return 'text-orange-700';
+  if (score >= 5) return 'text-emerald-700';
+  if (score >= 3) return 'text-amber-700';
+  if (score >= 1.5) return 'text-orange-700';
   return 'text-red-700';
 }
 
 export function getScoreBgColor(score: number): string {
-  if (score >= 7) return 'bg-emerald-50 border-emerald-200';
-  if (score >= 5) return 'bg-amber-50 border-amber-200';
-  if (score >= 3) return 'bg-orange-50 border-orange-200';
+  if (score >= 5) return 'bg-emerald-50 border-emerald-200';
+  if (score >= 3) return 'bg-amber-50 border-amber-200';
+  if (score >= 1.5) return 'bg-orange-50 border-orange-200';
   return 'bg-red-50 border-red-200';
 }
 
 export function getScoreLabel(score: number): string {
-  if (score >= 12) return 'Highly Trusted';
-  if (score >= 8) return 'Well Trusted';
-  if (score >= 5) return 'Trusted';
-  if (score >= 3) return 'Established';
+  if (score >= 6) return 'Highly Trusted';
+  if (score >= 4) return 'Well Trusted';
+  if (score >= 2.5) return 'Trusted';
+  if (score >= 1.5) return 'Established';
   return 'Limited Data';
 }
 
@@ -45,10 +52,11 @@ export function getTrustTier(
   reviewCount: number
 ): TrustTier {
   // Highly Trusted: elite tier — strong score, high rating, meaningful volume
-  if (score >= 12 && rating >= 4.5 && reviewCount >= 150) return 'highly_trusted';
-  // Trusted: solid track record
-  if (score >= 7 && rating >= 4.2) return 'trusted';
-  // Established: decent presence, acceptable rating
+  // Equivalent to roughly 4.5★+ with 150+ reviews after baseline adjustment
+  if (score >= 6 && rating >= 4.5 && reviewCount >= 150) return 'highly_trusted';
+  // Trusted: solid track record — 4.2★+ with decent volume
+  if (score >= 3.5 && rating >= 4.2) return 'trusted';
+  // Established: decent presence — enough reviews, acceptable rating
   if (reviewCount >= 80 && rating >= 3.8) return 'established';
   return null;
 }

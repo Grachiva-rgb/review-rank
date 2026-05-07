@@ -110,9 +110,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               ))}
             </div>
             <div className="mt-8 rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-5 py-4 text-center">
-              <span className="font-mono text-sm text-[#8B5E3C]">Smart Score = rating × log₁₀(reviews + 1)</span>
+              <span className="font-mono text-sm text-[#8B5E3C]">Smart Score = (rating − 3) × log₁₀(reviews + 1)</span>
               <p className="text-xs text-[#7A6B63] mt-1">
-                This formula rewards businesses with both strong ratings and meaningful review depth.
+                Subtracting 3 means volume only amplifies genuinely good ratings. A 3.8★ business with 50k reviews no longer outranks a 4.9★ business with 500.
               </p>
             </div>
           </div>
@@ -144,7 +144,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <footer className="border-t border-[#EDE8E3] px-6 py-8 bg-white/50">
           <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div>
-              <div className="font-mono text-sm text-[#8B5E3C] mb-1">rating × log₁₀(n+1)</div>
+              <div className="font-mono text-sm text-[#8B5E3C] mb-1">(rating−3) × log₁₀(n+1)</div>
               <div className="text-xs text-[#7A6B63]">Smart Score formula</div>
             </div>
             <div>
