@@ -34,7 +34,9 @@ export default function ResultsClient({
 
   const sortedPlaces = useMemo(() => {
     return [...places].sort((a, b) => {
-      if (filter === 'smart_score') return b.smart_score - a.smart_score;
+      // Default "smart_score" filter now sorts by the 0–100 Review Rank Score
+      // which blends Bayesian rating, volume, sentiment, and consistency.
+      if (filter === 'smart_score') return b.review_rank_score - a.review_rank_score;
       if (filter === 'rating') return b.rating - a.rating;
       if (filter === 'reviews') return b.user_ratings_total - a.user_ratings_total;
       // rising_stars: high rating, prioritise under-300-review businesses
@@ -44,7 +46,7 @@ export default function ResultsClient({
         if (aRising !== bRising) return bRising - aRising;
         return b.rating - a.rating;
       }
-      return b.smart_score - a.smart_score;
+      return b.review_rank_score - a.review_rank_score;
     });
   }, [places, filter]);
 

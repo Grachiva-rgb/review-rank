@@ -1,5 +1,31 @@
 import { Place, PlaceDetail, NormalizedBusiness } from './types';
 import { calculateSmartScore, MIN_DISPLAY_RATING } from './ranking';
+import { calculateReviewRankScore, BusinessReview } from './reviewRankScoring';
+
+type RawPlacesReview = {
+  text?: { text?: string };
+  rating?: number;
+  publishTime?: string;
+  relativePublishTimeDescription?: string;
+  authorAttribution?: { displayName?: string; uri?: string; photoUri?: string };
+};
+
+/**
+ * Normalize the Places API's recent-review shape into BusinessReview — the
+ * input shape our scoring engine expects. Places API v1 returns up to ~5
+ * most recent reviews per business; that's the signal we use for sentiment
+ * and consistency sub-scores.
+ */
+function toBusinessReviews(raw: RawPlacesReview[] | undefined): BusinessReview[] {
+  if (!raw || raw.length === 0) return [];
+  return raw.map((r, i) => ({
+    id: String(i),
+    rating: r.rating ?? 0,
+    text: r.text?.text ?? '',
+    createdAt: r.publishTime ?? new Date().toISOString(),
+    platform: 'google' as const,
+  }));
+}
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
@@ -25,6 +51,9 @@ export function normalizeBusiness(
       place.url ||
       `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(place.place_id)}`,
     smart_score: place.smart_score,
+    review_rank_score: place.review_rank_score,
+    rank_label: place.rank_label,
+    score_explanations: place.score_explanations,
   };
 }
 
@@ -52,6 +81,7 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     'places.currentOpeningHours',
     'places.priceLevel',
     'places.googleMapsUri',
+    'places.reviews',
   ].join(',');
 
   const body: Record<string, unknown> = { textQuery: query };
@@ -95,6 +125,14 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     const openingHours = p.currentOpeningHours as { openNow?: boolean } | undefined;
     const rating = (p.rating as number) || 0;
     const reviewCount = (p.userRatingCount as number) || 0;
+    const reviews = toBusinessReviews(p.reviews as RawPlacesReview[] | undefined);
+
+    const rrs = calculateReviewRankScore({
+      businessId: p.id as string,
+      rating,
+      totalReviewCount: reviewCount,
+      reviews,
+    });
 
     return {
       place_id: p.id as string,
@@ -113,6 +151,9 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       price_level: PRICE_LEVEL_MAP[p.priceLevel as string] ?? undefined,
       url: (p.googleMapsUri as string) || undefined,
       smart_score: calculateSmartScore(rating, reviewCount),
+      review_rank_score: rrs.finalScore,
+      rank_label: rrs.rankLabel,
+      score_explanations: rrs.explanations,
     };
   });
 }
@@ -170,11 +211,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
   type RawReview = {
     text?: { text?: string };
     rating?: number;
+    publishTime?: string;
     relativePublishTimeDescription?: string;
     authorAttribution?: { displayName?: string; uri?: string; photoUri?: string };
   };
 
-  const reviews = ((p.reviews as RawReview[]) || []).map((r) => ({
+  const rawReviews = (p.reviews as RawReview[]) || [];
+  const reviews = rawReviews.map((r) => ({
     author_name: r.authorAttribution?.displayName ?? 'Anonymous',
     author_url: r.authorAttribution?.uri,
     profile_photo_url: r.authorAttribution?.photoUri,
@@ -182,6 +225,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     relative_time_description: r.relativePublishTimeDescription ?? '',
     text: r.text?.text ?? '',
   }));
+
+  const rrs = calculateReviewRankScore({
+    businessId: p.id as string,
+    rating,
+    totalReviewCount: reviewCount,
+    reviews: toBusinessReviews(rawReviews),
+  });
 
   return {
     place_id: p.id as string,
@@ -208,5 +258,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     url: (p.googleMapsUri as string) || undefined,
     reviews,
     smart_score: calculateSmartScore(rating, reviewCount),
+    review_rank_score: rrs.finalScore,
+    rank_label: rrs.rankLabel,
+    score_explanations: rrs.explanations,
   };
 }

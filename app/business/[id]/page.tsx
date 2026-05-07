@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton';
 import NavLogo from '@/components/NavLogo';
 import {
   detectCategory,
-  getTrustTier,
+  getTrustTierFromRRS,
   getTrustTierLabel,
   getTrustTierStyle,
   getBusinessInsights,
@@ -82,7 +82,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
 
   // Detect category from the search query that led here (passed as ?cat=)
   const category = detectCategory(cat || '');
-  const tier = getTrustTier(place.smart_score, place.rating, place.user_ratings_total);
+  const tier = getTrustTierFromRRS(place.review_rank_score, place.rating, place.user_ratings_total);
   const tierLabel = getTrustTierLabel(tier);
   const tierStyle = getTrustTierStyle(tier);
   const insights = getBusinessInsights(place.rating, place.user_ratings_total, category);
@@ -145,7 +145,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
             </div>
 
             <div className="sm:flex-shrink-0 flex justify-center sm:justify-start">
-              <SmartScoreBadge score={place.smart_score} size="lg" />
+              <SmartScoreBadge score={place.review_rank_score} size="lg" />
             </div>
           </div>
 
@@ -269,13 +269,27 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
               </div>
               <span className="text-[#D9CEC8] text-xl font-mono">=</span>
               <div className="text-center">
-                <div className="font-mono text-2xl text-[#2F6F4E]">{place.smart_score.toFixed(2)}</div>
-                <div className="text-xs text-[#7A6B63] mt-0.5">Smart Score</div>
+                <div className="font-mono text-2xl text-[#2F6F4E]">
+                  {Math.round(place.review_rank_score)}
+                  <span className="text-sm opacity-60">/100</span>
+                </div>
+                <div className="text-xs text-[#7A6B63] mt-0.5">Review Rank Score</div>
               </div>
             </div>
-            <p className="text-xs text-[#7A6B63] mt-4 border-t border-[#EDE8E3] pt-3">
-              Smart Score balances star rating with review volume. A business with 4.7★ across 2,000
-              reviews outranks one with 4.9★ across 5 reviews — because volume signals consistency.
+            {place.score_explanations && place.score_explanations.length > 0 && (
+              <ul className="text-xs text-[#5A4A3F] mt-4 border-t border-[#EDE8E3] pt-3 space-y-1.5 leading-relaxed">
+                {place.score_explanations.map((reason, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <span className="text-[#B8A89F] select-none flex-shrink-0">·</span>
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-[#9A8C85] mt-3 leading-relaxed">
+              Review Rank Score (0–100) blends a Bayesian-adjusted rating, review volume,
+              recent sentiment, and rating consistency. It's a predictive reputation estimate —
+              not a replica of Google or Yelp's ranking.
             </p>
           </div>
 

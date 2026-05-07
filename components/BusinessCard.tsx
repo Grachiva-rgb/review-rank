@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Place } from '@/lib/types';
-import { BusinessCategory, getTrustTier, getTrustTierLabel, getTrustTierStyle, getRankingExplanation } from '@/lib/ranking';
+import { BusinessCategory, getTrustTierFromRRS, getTrustTierLabel, getTrustTierStyle, getRankingExplanation } from '@/lib/ranking';
 import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
 import QuoteButton from './QuoteButton';
@@ -29,10 +29,14 @@ function PriceLevel({ level }: { level?: number }) {
 
 export default function BusinessCard({ place, rank, category = 'general' }: BusinessCardProps) {
   const rankColor = RANK_COLORS[rank] ?? 'text-[#C2C2C2]';
-  const tier = getTrustTier(place.smart_score, place.rating, place.user_ratings_total);
+  const tier = getTrustTierFromRRS(place.review_rank_score, place.rating, place.user_ratings_total);
   const tierLabel = getTrustTierLabel(tier);
   const tierStyle = getTrustTierStyle(tier);
-  const rankingExplanation = getRankingExplanation(place.rating, place.user_ratings_total, category);
+  // Prefer the dynamic score-derived explanations (driver-based) if available;
+  // fall back to category-generic language for older cached records.
+  const explanations = place.score_explanations?.length
+    ? place.score_explanations
+    : [getRankingExplanation(place.rating, place.user_ratings_total, category)];
 
   // Flag business as a rising star: high rating, limited review history
   const isRisingStar = place.rating >= 4.7 && place.user_ratings_total < 300;
@@ -118,8 +122,15 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
         {/* Address */}
         <p className="text-xs text-[#9A8C85] mt-1.5 truncate">{place.formatted_address}</p>
 
-        {/* Ranking explanation — category-specific trust signal */}
-        <p className="text-xs text-[#5A4A3F] mt-2.5 leading-relaxed">{rankingExplanation}</p>
+        {/* Score explanations — driver-based plain-English reasons */}
+        <ul className="text-xs text-[#5A4A3F] mt-2.5 leading-relaxed space-y-1">
+          {explanations.slice(0, 3).map((reason, i) => (
+            <li key={i} className="flex gap-1.5">
+              <span className="text-[#B8A89F] select-none flex-shrink-0">·</span>
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
 
         {/* Lead gen CTA — only for eligible service categories with an established trust tier */}
         {tier !== null && (
@@ -150,9 +161,9 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
         </div>
       </div>
 
-      {/* Smart Score */}
+      {/* Review Rank Score (0–100) */}
       <div className="flex-shrink-0 self-center">
-        <SmartScoreBadge score={place.smart_score} />
+        <SmartScoreBadge score={place.review_rank_score} />
       </div>
     </div>
   );

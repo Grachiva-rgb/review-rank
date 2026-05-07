@@ -51,6 +51,28 @@ export function getScoreLabel(score: number): string {
 
 export type TrustTier = 'highly_trusted' | 'trusted' | 'established' | null;
 
+/**
+ * Tier from the 0–100 Review Rank Score. This is the preferred entry point —
+ * the score already blends rating, volume, sentiment, and consistency.
+ */
+export function getTrustTierFromRRS(
+  reviewRankScore: number,
+  rating: number,
+  reviewCount: number
+): TrustTier {
+  // Highly Trusted: top tier — strong blended score AND high rating AND real volume
+  if (reviewRankScore >= 65 && rating >= 4.5 && reviewCount >= 150) return 'highly_trusted';
+  // Trusted: reliably solid — blended score above the "Trusted" threshold
+  if (reviewRankScore >= 50 && rating >= 4.2) return 'trusted';
+  // Established: meaningful track record at acceptable quality
+  if (reviewRankScore >= 35 && rating >= 4.0 && reviewCount >= 50) return 'established';
+  return null;
+}
+
+/**
+ * Legacy tier from the old Smart Score (0–7.5 scale). Retained for callers
+ * that still pass smart_score; prefer getTrustTierFromRRS for new code.
+ */
 export function getTrustTier(
   score: number,
   rating: number,
