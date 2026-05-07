@@ -49,6 +49,7 @@ export default function SearchForm({
 
   const handleLocationChange = (val: string) => {
     setLocationValue(val);
+    setGpsCoords(null); // clear GPS coords when user types manually
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchSuggestions(val), 280);
   };
@@ -95,31 +96,33 @@ export default function SearchForm({
       setSubmitError('Please enter a business type to search.');
       return;
     }
-    if (!loc) {
-      setSubmitError('Please enter a location or use your current location.');
+    if (!loc || loc === 'Getting your location…') {
+      setSubmitError('Please enter a location or use the GPS button.');
       return;
     }
     setSubmitError('');
-    const query = `${cat} in ${loc}`;
-    router.push(
-      `/results?q=${encodeURIComponent(query)}&location=${encodeURIComponent(loc)}&category=${encodeURIComponent(cat)}`
-    );
+
+    if (gpsCoords) {
+      router.push(
+        `/results?category=${encodeURIComponent(cat)}&lat=${gpsCoords.lat}&lng=${gpsCoords.lng}&location=current+location`
+      );
+    } else {
+      const query = `${cat} in ${loc}`;
+      router.push(
+        `/results?q=${encodeURIComponent(query)}&location=${encodeURIComponent(loc)}&category=${encodeURIComponent(cat)}`
+      );
+    }
   };
 
-  const handleGps = async () => {
-    const cat = (categoryRef.current?.value || '').trim();
-    if (!cat) {
-      setGpsError('Enter a business type first');
-      return;
-    }
+  // Lat/lng stored when GPS is used — passed as hidden fields on submit
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
 
+  const handleGps = async () => {
     setGpsError('');
     setGpsLoading(true);
+    setLocationValue('Getting your location…');
 
     try {
-      // Prefer Capacitor Geolocation when running as a native app — it is
-      // faster, more accurate, and has proper native permission dialogs.
-      // Falls back to the standard browser API when running in a web browser.
       const { Geolocation } = await import('@capacitor/geolocation').catch(() => ({
         Geolocation: null,
       }));
@@ -128,7 +131,6 @@ export default function SearchForm({
       let longitude: number;
 
       if (Geolocation) {
-        // Native Capacitor path
         const position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
           timeout: 10000,
@@ -136,7 +138,6 @@ export default function SearchForm({
         latitude  = position.coords.latitude;
         longitude = position.coords.longitude;
       } else if (navigator.geolocation) {
-        // Web browser fallback
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
@@ -144,22 +145,24 @@ export default function SearchForm({
         longitude = pos.coords.longitude;
       } else {
         setGpsError('Geolocation is not available on this device.');
+        setLocationValue('');
         setGpsLoading(false);
         return;
       }
 
+      setGpsCoords({ lat: latitude, lng: longitude });
+      setLocationValue('Current location');
       setGpsLoading(false);
-      setLocationValue('current location');
-      router.push(
-        `/results?category=${encodeURIComponent(cat)}&lat=${latitude}&lng=${longitude}&location=current+location`
-      );
+      // Focus category so user can type their search next
+      categoryRef.current?.focus();
     } catch (err: unknown) {
       setGpsLoading(false);
+      setLocationValue('');
       const code = (err as { code?: number }).code;
       setGpsError(
-        code === 1 // PERMISSION_DENIED
-          ? 'Please enter a location to continue.'
-          : 'Could not get your location. Please enter it manually.'
+        code === 1
+          ? 'Location access denied — please type your city manually.'
+          : 'Could not get your location. Please type it manually.'
       );
     }
   };

@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
   url.searchParams.set('input', q);
-  url.searchParams.set('types', '(cities)');
+  url.searchParams.set('types', 'geocode');
   url.searchParams.set('language', 'en');
   url.searchParams.set('key', key);
 
