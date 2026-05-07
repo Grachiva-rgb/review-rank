@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
 const MAX_NAME_LEN = 120;
 const MAX_EMAIL_LEN = 254;
 const MAX_NOTE_LEN = 1000;
@@ -35,7 +36,9 @@ export async function POST(request: NextRequest) {
     owner_name: owner_name.trim().slice(0, MAX_NAME_LEN),
     owner_email: owner_email.trim().slice(0, MAX_EMAIL_LEN).toLowerCase(),
     business_name: business_name.trim().slice(0, MAX_NAME_LEN),
-    business_place_id: typeof business_place_id === 'string' ? business_place_id.trim().slice(0, 200) : null,
+    business_place_id: (typeof business_place_id === 'string' && PLACE_ID_RE.test(business_place_id.trim()))
+      ? business_place_id.trim()
+      : null,
     note: typeof note === 'string' ? note.trim().slice(0, MAX_NOTE_LEN) : null,
   };
 

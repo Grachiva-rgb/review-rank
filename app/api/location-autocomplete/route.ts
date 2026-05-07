@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim();
-  if (!q || q.length < 2) return NextResponse.json([]);
+  if (!q || q.length < 2 || q.length > 200) return NextResponse.json([]);
 
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) return NextResponse.json([]);
@@ -13,16 +13,20 @@ export async function GET(req: NextRequest) {
   url.searchParams.set('language', 'en');
   url.searchParams.set('key', key);
 
-  const res = await fetch(url.toString());
-  if (!res.ok) return NextResponse.json([]);
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return NextResponse.json([]);
 
-  const data = await res.json();
-  const suggestions = (data.predictions ?? []).map((p: { description: string; place_id: string }) => ({
-    label: p.description.replace(/, USA$/, ''),
-    placeId: p.place_id,
-  }));
+    const data = await res.json();
+    const suggestions = (data.predictions ?? []).map((p: { description: string; place_id: string }) => ({
+      label: p.description.replace(/, USA$/, ''),
+      placeId: p.place_id,
+    }));
 
-  return NextResponse.json(suggestions, {
-    headers: { 'Cache-Control': 'public, max-age=60' },
-  });
+    return NextResponse.json(suggestions, {
+      headers: { 'Cache-Control': 'public, max-age=60' },
+    });
+  } catch {
+    return NextResponse.json([]);
+  }
 }

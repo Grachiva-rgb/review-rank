@@ -3,7 +3,8 @@ import { deliverLeadToPartners } from '@/lib/leadDelivery';
 import { normalizePartnerCategory } from '@/lib/categories';
 
 // Loose phone pattern — accepts common formats like (555) 000-0000, +1 555 000 0000, etc.
-const PHONE_RE = /^[\d\s\-\(\)\+\.]{7,20}$/;
+const PHONE_RE    = /^[\d\s\-\(\)\+\.]{7,20}$/;
+const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
 
 const MAX_NAME  = 120;
 const MAX_PHONE = 30;
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
     contact_phone:     contact_phone.trim().slice(0, MAX_PHONE),
     description:       description.trim().slice(0, MAX_DESC),
     business_name:     business_name.trim().slice(0, MAX_NAME),
-    business_place_id: typeof business_place_id === 'string'
-                         ? business_place_id.trim().slice(0, 200)
+    business_place_id: (typeof business_place_id === 'string' && PLACE_ID_RE.test(business_place_id.trim()))
+                         ? business_place_id.trim()
                          : null,
     // Normalize the incoming category string against the canonical partner
     // taxonomy. This collapses drift between the consumer-side ranking enum

@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const origin = req.headers.get('origin') || new URL(req.url).origin;
+  // Use a configured site URL rather than the request Origin header.
+  // Trusting Origin would allow an attacker to forge the header and set
+  // Stripe's success/cancel URLs to an arbitrary domain.
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+    'https://review-rank.vercel.app';
   const stripe = getStripe();
 
   try {

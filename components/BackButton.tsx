@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function BackButton() {
@@ -16,11 +17,17 @@ export default function BackButton() {
   };
 
   return (
-    <button
-      onClick={handleBack}
-      className="text-[#7A6B63] hover:text-[#241C15] text-sm transition-colors"
-    >
-      ← Back to results
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleBack}
+        className="text-[#7A6B63] hover:text-[#241C15] text-sm transition-colors"
+      >
+        ← Back to results
+      </button>
+      <span className="text-[#D9CEC8] select-none">·</span>
+      <Link href="/" className="text-[#7A6B63] hover:text-[#241C15] text-sm transition-colors">
+        Home
+      </Link>
+    </div>
   );
 }
