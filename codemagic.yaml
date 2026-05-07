@@ -19,6 +19,12 @@ workflows:
       - name: Install dependencies
         script: npm ci
 
+      - name: Add iOS platform if not present
+        script: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
       - name: Capacitor sync
         script: npx cap sync ios
 
@@ -61,6 +67,12 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm ci
+
+      - name: Add Android platform if not present
+        script: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
 
       - name: Capacitor sync
         script: npx cap sync android
