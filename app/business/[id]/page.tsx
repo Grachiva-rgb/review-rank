@@ -4,6 +4,7 @@ import StarRating from '@/components/StarRating';
 import SmartScoreBadge from '@/components/SmartScoreBadge';
 import BackButton from '@/components/BackButton';
 import NavLogo from '@/components/NavLogo';
+import ClientTracker from '@/components/ClientTracker';
 import {
   detectCategory,
   getTrustTierFromRRS,
@@ -89,6 +90,12 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
 
   return (
     <div className="relative min-h-screen bg-[#FAF7F0]">
+      <ClientTracker
+        event="business_viewed"
+        placeId={place.place_id}
+        score={place.review_rank_score}
+        tier={tier || 'none'}
+      />
       <div className="relative z-10">
         {/* Nav */}
         <nav className="border-b border-[#EDE8E3] bg-[#FAF7F0]/95 backdrop-blur-md px-4 py-4">

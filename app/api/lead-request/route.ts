@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { deliverLeadToPartners } from '@/lib/leadDelivery';
 
 // Loose phone pattern — accepts common formats like (555) 000-0000, +1 555 000 0000, etc.
 const PHONE_RE = /^[\d\s\-\(\)\+\.]{7,20}$/;
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+    let leadId: string | undefined;
     if (supabaseUrl && supabaseKey) {
       const res = await fetch(`${supabaseUrl}/rest/v1/leads`, {
         method: 'POST',
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
           'Content-Type':  'application/json',
           'apikey':        supabaseKey,
           'Authorization': `Bearer ${supabaseKey}`,
-          'Prefer':        'return=minimal',
+          'Prefer':        'return=representation',
         },
         body: JSON.stringify(sanitized),
       });
@@ -89,6 +91,22 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      // Extract inserted lead id for delivery correlation.
+      try {
+        const rows = (await res.json()) as Array<{ id?: string }>;
+        leadId = rows?.[0]?.id;
+      } catch { /* representation may be empty — non-fatal */ }
+
+      // Fire-and-forget delivery. Do not block the user on email fan-out.
+      deliverLeadToPartners({
+        leadId,
+        category:     sanitized.category,
+        businessName: sanitized.business_name,
+        contactName:  sanitized.contact_name,
+        contactPhone: sanitized.contact_phone,
+        description:  sanitized.description,
+      }).catch((err) => console.error('[lead-request] delivery error:', err));
     } else {
       // Supabase not configured — log to server console
       console.log('[lead-request] New lead (Supabase not configured):', {

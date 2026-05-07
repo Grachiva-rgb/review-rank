@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Playfair_Display, Inter, Space_Mono } from 'next/font/google';
 import './globals.css';
+import { PostHogProvider } from '@/components/PostHogProvider';
 
 const playfairDisplay = Playfair_Display({
   weight: ['400', '500', '600', '700', '800', '900'],
@@ -57,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${playfairDisplay.variable} ${inter.variable} ${spaceMono.variable}`}
     >
       <body className="bg-[#FAF7F0] text-[#241C15] antialiased min-h-screen">
-        {children}
+        <PostHogProvider>{children}</PostHogProvider>
       </body>
     </html>
   );

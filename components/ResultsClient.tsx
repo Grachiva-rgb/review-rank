@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Place, SortFilter } from '@/lib/types';
 import { detectCategory, BusinessCategory } from '@/lib/ranking';
 import BusinessCard from './BusinessCard';
 import FilterBar from './FilterBar';
 import SearchForm from './SearchForm';
+import { track } from './PostHogProvider';
 
 interface ResultsClientProps {
   places: Place[];
@@ -26,6 +27,17 @@ export default function ResultsClient({
   isGps = false,
 }: ResultsClientProps) {
   const [filter, setFilter] = useState<SortFilter>('smart_score');
+
+  useEffect(() => {
+    track.searchPerformed({
+      category: category || '',
+      location: location || '',
+      isGps,
+      resultCount: places.length,
+    });
+    // Fire once per (category, location) change — not on filter toggles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, location, isGps]);
 
   const detectedCategory: BusinessCategory = useMemo(
     () => detectCategory(category || query),
