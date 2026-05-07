@@ -1,5 +1,5 @@
 import { Place, PlaceDetail, NormalizedBusiness } from './types';
-import { calculateSmartScore } from './ranking';
+import { calculateSmartScore, MIN_DISPLAY_RATING } from './ranking';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
@@ -86,7 +86,10 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
 
   const data = await response.json() as { places?: Record<string, unknown>[] };
 
-  return (data.places || []).map((p) => {
+  return (data.places || []).filter((p) => {
+    const r = (p.rating as number) || 0;
+    return r >= MIN_DISPLAY_RATING;
+  }).map((p) => {
     const displayName = p.displayName as { text?: string } | undefined;
     const location = p.location as { latitude?: number; longitude?: number } | undefined;
     const openingHours = p.currentOpeningHours as { openNow?: boolean } | undefined;
