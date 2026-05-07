@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: BusinessPageProps): Promise<M
     const place = await getPlaceDetails(id);
     const score = Math.round(place.review_rank_score);
     return {
-      title: `${place.name} — Review Rank Score & Trust Analysis | ReviewRank`,
+      title: `${place.name} — Review Rank Score & Trust Analysis`,
       description: `${place.name} has a Review Rank Score of ${score}/100 based on ${place.user_ratings_total.toLocaleString()} reviews. See full trust analysis, ratings, and customer feedback.`,
       openGraph: {
         title: `${place.name} | ReviewRank`,

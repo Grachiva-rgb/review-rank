@@ -25,18 +25,18 @@ export async function generateMetadata({ searchParams }: ResultsPageProps): Prom
   if (category && location) {
     const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     return {
-      title: `Best ${cap(category)} in ${location} | ReviewRank`,
+      title: `Best ${cap(category)} in ${location}`,
       description: `Find trusted ${category} in ${location} ranked by review quality, volume, and consistency — not paid placements or star averages alone.`,
     };
   }
   if (q) {
     return {
-      title: `${q} Rankings | ReviewRank`,
+      title: `${q} Rankings`,
       description: `Discover top-ranked results for "${q}" scored by real customer review signals.`,
     };
   }
   return {
-    title: 'Local Business Rankings | ReviewRank',
+    title: 'Local Business Rankings',
     description: 'Find trusted local businesses ranked by review quality, volume, and consistency.',
   };
 }

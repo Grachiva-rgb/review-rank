@@ -26,13 +26,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const city = getCityBySlug(citySlug);
   if (!cat || !city) return {};
 
-  const title = `Best ${cat.plural} in ${city.display} | ReviewRank`;
+  const title = `Best ${cat.plural} in ${city.display}`;
   const description = `Find the most trusted ${cat.plural.toLowerCase()} in ${city.display}. ${cat.description} Rankings based on review quality, volume, and consistency — no paid placements.`;
 
   return {
     title,
     description,
-    openGraph: { title, description },
+    openGraph: { title: `${title} | ReviewRank`, description },
     alternates: {
       canonical: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://reviewrank.app'}/${catSlug}/${citySlug}`,
     },
