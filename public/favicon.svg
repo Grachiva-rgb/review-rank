@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Rounded square background -->
+  <rect width="32" height="32" rx="7" fill="#8B5E3C"/>
+  <!-- Pin body (white) -->
+  <path d="M16 5C11.029 5 7 9.029 7 14c0 6.5 9 13 9 13s9-6.5 9-13c0-4.971-4.029-9-9-9z" fill="white"/>
+  <!-- Checkmark in copper -->
+  <path d="M11.5 13.5l3 3 6-6" stroke="#8B5E3C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

@@ -1,0 +1,124 @@
+workflows:
+
+  # ─────────────────────────────────────────────────────────────────
+  # iOS build → TestFlight / App Store
+  # ─────────────────────────────────────────────────────────────────
+  ios-release:
+    name: iOS Release
+    max_build_duration: 60
+    environment:
+      groups:
+        - reviewrank_credentials   # add this group in Codemagic → Team → Global variables
+      vars:
+        CAPACITOR_SERVER_URL: $VERCEL_URL   # e.g. https://review-rank.vercel.app
+        GOOGLE_PLACES_API_KEY: $GOOGLE_PLACES_API_KEY
+      node: 20.11.0
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Set Vercel deployment URL in Capacitor config
+        script: |
+          # Replace placeholder with real URL from env
+          sed -i "s|https://review-rank.vercel.app|$CAPACITOR_SERVER_URL|g" capacitor.config.ts
+
+      - name: Capacitor sync
+        script: npx cap sync ios
+
+      - name: Install pods
+        script: cd ios/App && pod install
+
+      - name: Build & sign iOS app
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace ios/App/App.xcworkspace \
+            --scheme App
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        submit_to_app_store: false   # change to true for direct App Store release
+
+  # ─────────────────────────────────────────────────────────────────
+  # Android build → Google Play
+  # ─────────────────────────────────────────────────────────────────
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    environment:
+      groups:
+        - reviewrank_credentials
+      vars:
+        CAPACITOR_SERVER_URL: $VERCEL_URL
+        GOOGLE_PLACES_API_KEY: $GOOGLE_PLACES_API_KEY
+      node: 20.11.0
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Set Vercel deployment URL
+        script: |
+          sed -i "s|https://review-rank.vercel.app|$CAPACITOR_SERVER_URL|g" capacitor.config.ts
+
+      - name: Capacitor sync
+        script: npx cap sync android
+
+      - name: Build Android release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Sign AAB
+        script: |
+          cd android
+          jarsigner \
+            -verbose \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            -keystore $CM_KEYSTORE_PATH \
+            -storepass $CM_KEYSTORE_PASSWORD \
+            -keypass $CM_KEY_PASSWORD \
+            app/build/outputs/bundle/release/app-release.aab \
+            $CM_KEY_ALIAS
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal   # internal → alpha → beta → production
+        submit_as_draft: true
+
+# ─────────────────────────────────────────────────────────────────
+# REQUIRED SECRETS — add these in Codemagic → Team → Global variables
+# under the group name "reviewrank_credentials"
+# ─────────────────────────────────────────────────────────────────
+#
+# VERCEL_URL                       https://review-rank.vercel.app
+# GOOGLE_PLACES_API_KEY            your Google Places API key
+#
+# iOS secrets:
+#   APP_STORE_CONNECT_PRIVATE_KEY      contents of .p8 file
+#   APP_STORE_CONNECT_KEY_IDENTIFIER   key ID from App Store Connect
+#   APP_STORE_CONNECT_ISSUER_ID        issuer UUID from App Store Connect
+#   (signing certificate + provisioning profile: upload in Codemagic → Code signing)
+#
+# Android secrets:
+#   CM_KEYSTORE                        base64-encoded keystore file
+#   CM_KEYSTORE_PASSWORD               keystore password
+#   CM_KEY_ALIAS                       key alias
+#   CM_KEY_PASSWORD                    key password
+#   GCLOUD_SERVICE_ACCOUNT_CREDENTIALS JSON key for Google Play API
