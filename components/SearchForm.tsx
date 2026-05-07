@@ -49,7 +49,9 @@ export default function SearchForm({
 
   const handleLocationChange = (val: string) => {
     setLocationValue(val);
-    setGpsCoords(null); // clear GPS coords when user types manually
+    setGpsCoords(null);
+    setGpsError('');
+    setSubmitError('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchSuggestions(val), 280);
   };
@@ -77,12 +79,21 @@ export default function SearchForm({
     }
   };
 
-  // When a suggested search chip pre-fills category with no location, prompt immediately
+  // Clear all errors when the chip/category changes
+  useEffect(() => {
+    setSubmitError('');
+    setGpsError('');
+  }, [defaultCategory]);
+
+  // When a chip is clicked with no location, auto-trigger GPS silently
+  // If GPS is unavailable or denied, focus the location field instead
   useEffect(() => {
     if (defaultCategory && !defaultLocation) {
-      setSubmitError('Enter a location or use your current location to search near you.');
-      locationRef.current?.focus();
+      // Small delay so the component has painted first
+      const t = setTimeout(() => handleGps(), 200);
+      return () => clearTimeout(t);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultCategory, defaultLocation]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -153,17 +164,19 @@ export default function SearchForm({
       setGpsCoords({ lat: latitude, lng: longitude });
       setLocationValue('Current location');
       setGpsLoading(false);
-      // Focus category so user can type their search next
-      categoryRef.current?.focus();
+      setGpsError('');
+      // Focus category if empty, otherwise leave focus alone
+      if (!categoryRef.current?.value) categoryRef.current?.focus();
     } catch (err: unknown) {
       setGpsLoading(false);
       setLocationValue('');
       const code = (err as { code?: number }).code;
       setGpsError(
         code === 1
-          ? 'Location access denied — please type your city manually.'
-          : 'Could not get your location. Please type it manually.'
+          ? 'Location access denied — type your city below.'
+          : 'Could not get your location — type your city below.'
       );
+      locationRef.current?.focus();
     }
   };
 
@@ -320,8 +333,8 @@ export default function SearchForm({
         </div>
       </div>
 
-      {submitError && (
-        <p className="text-sm text-red-600 mt-2">{submitError}</p>
+      {(submitError || gpsError) && (
+        <p className="text-sm text-red-600 mt-2">{submitError || gpsError}</p>
       )}
 
       <div className="flex items-center gap-2 mt-2.5">
@@ -337,10 +350,6 @@ export default function SearchForm({
           {gpsLoading ? 'Getting location…' : 'use my current location'}
         </button>
       </div>
-
-      {gpsError && (
-        <p className="text-sm text-red-600 mt-1">{gpsError}</p>
-      )}
     </form>
   );
 }
