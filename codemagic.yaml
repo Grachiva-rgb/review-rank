@@ -19,6 +19,12 @@ workflows:
       - name: Install dependencies
         script: npm ci
 
+      - name: Create web placeholder for Capacitor
+        script: |
+          # server.url mode: no static build needed, but Capacitor requires webDir to exist
+          mkdir -p out
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://review-rank.vercel.app"></head><body></body></html>' > out/index.html
+
       - name: Add iOS platform if not present
         script: |
           if [ ! -f "ios/App/Podfile" ]; then
@@ -67,6 +73,11 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm ci
+
+      - name: Create web placeholder for Capacitor
+        script: |
+          mkdir -p out
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://review-rank.vercel.app"></head><body></body></html>' > out/index.html
 
       - name: Add Android platform if not present
         script: |
