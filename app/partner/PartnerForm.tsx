@@ -2,12 +2,7 @@
 
 import { useState } from 'react';
 import { track } from '@/components/PostHogProvider';
-
-const CATEGORIES = [
-  'landscaping', 'plumbing', 'electrical', 'hvac', 'roofing',
-  'cleaning', 'painting', 'auto repair', 'pest control',
-  'moving', 'general contractor', 'other',
-];
+import { PARTNER_CATEGORIES, PARTNER_CATEGORY_LABELS } from '@/lib/categories';
 
 export default function PartnerForm() {
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +57,16 @@ export default function PartnerForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Business name *" name="business_name" required />
-        <Field label="Category *" name="category" type="select" options={CATEGORIES} required />
+        <Field
+          label="Category *"
+          name="category"
+          type="select"
+          options={PARTNER_CATEGORIES.map((slug) => ({
+            value: slug,
+            label: PARTNER_CATEGORY_LABELS[slug],
+          }))}
+          required
+        />
         <Field label="Contact email *" name="contact_email" type="email" required />
         <Field label="Contact phone" name="contact_phone" type="tel" />
         <Field label="City" name="city" />
@@ -99,13 +103,15 @@ export default function PartnerForm() {
   );
 }
 
+interface SelectOption { value: string; label: string }
+
 interface FieldProps {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
   placeholder?: string;
-  options?: string[];
+  options?: SelectOption[];
   defaultValue?: string;
   min?: number;
   max?: number;
@@ -124,7 +130,7 @@ function Field({
         <select name={name} required={required} defaultValue="" className={base}>
           <option value="" disabled>Choose…</option>
           {options.map((o) => (
-            <option key={o} value={o}>{o}</option>
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
       ) : (

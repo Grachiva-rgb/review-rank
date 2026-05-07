@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe, isStripeConfigured, PARTNER_MONTHLY_CENTS } from '@/lib/stripe';
 import { isSupabaseConfigured, sbInsert } from '@/lib/supabase';
+import { normalizePartnerCategory } from '@/lib/categories';
 
 const MAX_STR = 120;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,7 +27,8 @@ export async function POST(req: NextRequest) {
   const business_name = typeof b.business_name === 'string' ? b.business_name.trim().slice(0, MAX_STR) : '';
   const contact_email = typeof b.contact_email === 'string' ? b.contact_email.trim().slice(0, MAX_STR) : '';
   const contact_phone = typeof b.contact_phone === 'string' ? b.contact_phone.trim().slice(0, MAX_STR) : '';
-  const category      = typeof b.category === 'string' ? b.category.trim().slice(0, 50) : '';
+  const categoryRaw   = typeof b.category === 'string' ? b.category.trim().slice(0, 50) : '';
+  const category      = normalizePartnerCategory(categoryRaw) ?? '';
   const city          = typeof b.city === 'string' ? b.city.trim().slice(0, 80) : '';
   const stateRaw      = typeof b.state === 'string' ? b.state.trim().toUpperCase() : '';
   const state         = STATE_RE.test(stateRaw) ? stateRaw : '';
@@ -34,7 +36,12 @@ export async function POST(req: NextRequest) {
 
   if (!business_name) return NextResponse.json({ error: 'Business name is required.' }, { status: 400 });
   if (!EMAIL_RE.test(contact_email)) return NextResponse.json({ error: 'Valid email required.' }, { status: 400 });
-  if (!category) return NextResponse.json({ error: 'Category is required.' }, { status: 400 });
+  if (!category) {
+    return NextResponse.json(
+      { error: categoryRaw ? 'Unknown category. Please choose one from the list.' : 'Category is required.' },
+      { status: 400 }
+    );
+  }
 
   // Create a pending partner record up front so the webhook can correlate.
   let partnerId: string | null = null;

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { BusinessCategory } from '@/lib/ranking';
+import { businessCategoryToPartnerCategory } from '@/lib/categories';
 
 // Categories eligible for lead generation
 const LEAD_ELIGIBLE: Set<BusinessCategory> = new Set([
@@ -76,7 +77,11 @@ export default function QuoteButton({ businessName, businessId, category }: Quot
           description,
           business_name:      businessName,
           business_place_id:  businessId,
-          category,
+          // Map the ranking-side BusinessCategory (e.g. "automotive",
+          // "home_services") to the partner taxonomy slug stored in the
+          // `partners` table (e.g. "auto-repair", "general-contractor").
+          // The API normalizes again server-side for defense in depth.
+          category:           businessCategoryToPartnerCategory(category),
         }),
       });
 

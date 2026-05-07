@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deliverLeadToPartners } from '@/lib/leadDelivery';
+import { normalizePartnerCategory } from '@/lib/categories';
 
 // Loose phone pattern — accepts common formats like (555) 000-0000, +1 555 000 0000, etc.
 const PHONE_RE = /^[\d\s\-\(\)\+\.]{7,20}$/;
@@ -52,9 +53,15 @@ export async function POST(request: NextRequest) {
     business_place_id: typeof business_place_id === 'string'
                          ? business_place_id.trim().slice(0, 200)
                          : null,
-    category:          typeof category === 'string'
-                         ? category.trim().slice(0, 50)
-                         : 'general',
+    // Normalize the incoming category string against the canonical partner
+    // taxonomy. This collapses drift between the consumer-side ranking enum
+    // (BusinessCategory — e.g. "automotive", "home_services") and the
+    // partner-side slugs stored in the `partners` table (e.g. "auto-repair",
+    // "general-contractor"). Unknown or missing categories fall back to
+    // "other" so the lead is still persisted but matches no partner.
+    category:          normalizePartnerCategory(
+                         typeof category === 'string' ? category : null
+                       ) ?? 'other',
     status: 'new',
   };
 
