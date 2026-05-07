@@ -25,17 +25,9 @@ workflows:
           mkdir -p out
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://review-rank.vercel.app"></head><body></body></html>' > out/index.html
 
-      - name: Add iOS platform if not present
-        script: |
-          if [ ! -f "ios/App/Podfile" ]; then
-            npx cap add ios
-          fi
-
       - name: Capacitor sync
         script: npx cap sync ios
-
-      - name: Install pods
-        script: cd ios/App && pod install
+        # Note: Capacitor 8 uses Swift Package Manager — no pod install needed
 
       - name: Build & sign iOS app
         script: |
@@ -78,12 +70,6 @@ workflows:
         script: |
           mkdir -p out
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://review-rank.vercel.app"></head><body></body></html>' > out/index.html
-
-      - name: Add Android platform if not present
-        script: |
-          if [ ! -f "android/build.gradle" ]; then
-            npx cap add android
-          fi
 
       - name: Capacitor sync
         script: npx cap sync android
