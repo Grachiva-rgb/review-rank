@@ -21,7 +21,7 @@ workflows:
 
       - name: Add iOS platform if not present
         script: |
-          if [ ! -d "ios" ]; then
+          if [ ! -f "ios/App/Podfile" ]; then
             npx cap add ios
           fi
 
@@ -70,7 +70,7 @@ workflows:
 
       - name: Add Android platform if not present
         script: |
-          if [ ! -d "android" ]; then
+          if [ ! -f "android/build.gradle" ]; then
             npx cap add android
           fi
 
