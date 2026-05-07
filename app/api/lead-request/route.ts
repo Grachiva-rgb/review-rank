@@ -98,15 +98,24 @@ export async function POST(request: NextRequest) {
         leadId = rows?.[0]?.id;
       } catch { /* representation may be empty — non-fatal */ }
 
-      // Fire-and-forget delivery. Do not block the user on email fan-out.
-      deliverLeadToPartners({
-        leadId,
-        category:     sanitized.category,
-        businessName: sanitized.business_name,
-        contactName:  sanitized.contact_name,
-        contactPhone: sanitized.contact_phone,
-        description:  sanitized.description,
-      }).catch((err) => console.error('[lead-request] delivery error:', err));
+      // Await delivery. Serverless functions freeze unresolved promises once
+      // the response is returned, so fire-and-forget drops the email send.
+      // The partner-matching loop is fast (single Supabase select + Resend
+      // sends, typically <2s total), so awaiting is worth the latency.
+      try {
+        await deliverLeadToPartners({
+          leadId,
+          category:     sanitized.category,
+          businessName: sanitized.business_name,
+          contactName:  sanitized.contact_name,
+          contactPhone: sanitized.contact_phone,
+          description:  sanitized.description,
+        });
+      } catch (err) {
+        // Delivery failures must not block the user from submitting their
+        // request. Log and continue.
+        console.error('[lead-request] delivery error:', err);
+      }
     } else {
       // Supabase not configured — log to server console
       console.log('[lead-request] New lead (Supabase not configured):', {
