@@ -1,6 +1,7 @@
 import SearchForm from '@/components/SearchForm';
 import NavLogo from '@/components/NavLogo';
 import Link from 'next/link';
+import { SEO_CATEGORIES, SEO_CITIES } from '@/lib/seo';
 
 interface HomePageProps {
   searchParams: Promise<{ category?: string }>;
@@ -26,7 +27,7 @@ const HOW_WE_RANK = [
   },
   {
     label: 'Combined trust score',
-    description: 'Our Smart Score multiplies both factors, so only businesses that are both highly rated and widely reviewed rise to the top.',
+    description: 'Our Review Rank Score combines both factors, so only businesses that are both highly rated and widely reviewed rise to the top.',
   },
 ];
 
@@ -37,11 +38,43 @@ const VS_GOOGLE = [
   'We surface reliable businesses faster, reducing the risk of a bad experience.',
 ];
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://reviewrank.app';
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'ReviewRank',
+  url: SITE_URL,
+  description: 'Find trusted local businesses ranked by review quality, volume, and consistency.',
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: `${SITE_URL}/results?category={search_term}`,
+    },
+    'query-input': 'required name=search_term',
+  },
+};
+
+// Top category/city combos for the discovery section
+const FEATURED_COMBOS = [
+  { cat: SEO_CATEGORIES[0], city: SEO_CITIES[0] },  // plumbers / Cleveland
+  { cat: SEO_CATEGORIES[1], city: SEO_CITIES[1] },  // dentists / Columbus
+  { cat: SEO_CATEGORIES[2], city: SEO_CITIES[2] },  // hvac / Akron
+  { cat: SEO_CATEGORIES[4], city: SEO_CITIES[10] }, // mechanics / Nashville
+  { cat: SEO_CATEGORIES[6], city: SEO_CITIES[12] }, // restaurants / Atlanta
+  { cat: SEO_CATEGORIES[9], city: SEO_CITIES[6] },  // contractors / Detroit
+];
+
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const defaultCategory = (params.category || '').slice(0, 100);
   return (
     <main className="relative min-h-screen flex flex-col bg-[#FAF7F0]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+      />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(139,94,60,0.06),transparent)] pointer-events-none" />
 
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -90,11 +123,30 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </Link>
             ))}
           </div>
+        </section>
 
+        {/* Popular searches — SEO-linked category/city combos */}
+        <section className="border-t border-[#EDE8E3] bg-white px-6 py-10">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="font-display text-xl text-[#241C15] mb-1 text-center">Popular searches</h2>
+            <p className="text-xs text-[#7A6B63] text-center mb-6">Pre-ranked lists for common categories and cities</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {FEATURED_COMBOS.map(({ cat, city }) => (
+                <Link
+                  key={`${cat.slug}-${city.slug}`}
+                  href={`/${cat.slug}/${city.slug}`}
+                  className="rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-4 py-3 hover:border-[#8B5E3C]/40 hover:shadow-sm transition-all"
+                >
+                  <div className="text-sm font-semibold text-[#241C15] leading-snug">{cat.plural}</div>
+                  <div className="text-xs text-[#8B5E3C] mt-0.5">{city.display}</div>
+                </Link>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* How we rank */}
-        <section className="border-t border-[#EDE8E3] bg-white px-6 py-12">
+        <section className="border-t border-[#EDE8E3] bg-[#FAF7F0] px-6 py-12">
           <div className="max-w-3xl mx-auto">
             <h2 className="font-display text-2xl text-[#241C15] mb-2 text-center">How we rank businesses</h2>
             <p className="text-sm text-[#7A6B63] text-center mb-8">
@@ -109,17 +161,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 </div>
               ))}
             </div>
-            <div className="mt-8 rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-5 py-4 text-center">
-              <span className="font-mono text-sm text-[#8B5E3C]">Smart Score = (rating − 3.5) × log₁₀(reviews + 1)</span>
-              <p className="text-xs text-[#7A6B63] mt-1">
-                Only businesses rated 4.0★ or higher are shown. The baseline of 3.5 means volume only amplifies genuinely good ratings.
+            <div className="mt-8 rounded-xl border border-[#EDE8E3] bg-white px-5 py-4 text-center">
+              <p className="text-sm text-[#5A4A3F]">
+                The <strong>Review Rank Score</strong> (0–100) weighs rating quality, review volume,
+                recency, and consistency — giving you a single number you can actually compare.
               </p>
+              <Link href="/methodology" className="text-xs text-[#8B5E3C] hover:text-[#6B4A2F] mt-2 inline-block">
+                Read the full methodology →
+              </Link>
             </div>
           </div>
         </section>
 
         {/* Why use this instead of Google */}
-        <section className="border-t border-[#EDE8E3] bg-[#FAF7F0] px-6 py-12">
+        <section className="border-t border-[#EDE8E3] bg-white px-6 py-12">
           <div className="max-w-3xl mx-auto">
             <h2 className="font-display text-2xl text-[#241C15] mb-6 text-center">
               Why use this instead of Google?
@@ -128,7 +183,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {VS_GOOGLE.map((point, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-3 rounded-xl border border-[#EDE8E3] bg-white px-4 py-4 shadow-sm"
+                  className="flex items-start gap-3 rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-4 py-4 shadow-sm"
                 >
                   <span className="flex-shrink-0 mt-0.5 flex items-center justify-center w-5 h-5 rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C] text-xs font-bold">
                     {i + 1}
@@ -140,12 +195,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
 
+        {/* Business owner CTA — subtle */}
+        <section className="border-t border-[#EDE8E3] bg-[#FAF7F0] px-6 py-8">
+          <div className="max-w-3xl mx-auto text-center">
+            <p className="text-sm text-[#7A6B63]">
+              Own a local business?{' '}
+              <Link href="/partner" className="text-[#8B5E3C] hover:text-[#6B4A2F]">
+                Learn about getting matched with customers →
+              </Link>
+            </p>
+          </div>
+        </section>
+
         {/* Footer */}
         <footer className="border-t border-[#EDE8E3] px-6 py-8 bg-white/50">
           <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div>
-              <div className="font-mono text-sm text-[#8B5E3C] mb-1">(rating−3.5) × log₁₀(n+1)</div>
-              <div className="text-xs text-[#7A6B63]">Smart Score formula</div>
+              <div className="font-mono text-sm text-[#8B5E3C] mb-1">0 – 100</div>
+              <div className="text-xs text-[#7A6B63]">Review Rank Score scale</div>
             </div>
             <div>
               <div className="font-mono text-sm text-[#241C15] mb-1">Up to 20</div>

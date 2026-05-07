@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getPlaceDetails } from '@/lib/places';
 import Link from 'next/link';
 import StarRating from '@/components/StarRating';
@@ -16,6 +17,27 @@ import {
 interface BusinessPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ cat?: string }>;
+}
+
+const PLACE_ID_RE_META = /^[A-Za-z0-9_-]{10,100}$/;
+
+export async function generateMetadata({ params }: BusinessPageProps): Promise<Metadata> {
+  const { id } = await params;
+  if (!id || !PLACE_ID_RE_META.test(id)) return {};
+  try {
+    const place = await getPlaceDetails(id);
+    const score = Math.round(place.review_rank_score);
+    return {
+      title: `${place.name} — Review Rank Score & Trust Analysis | ReviewRank`,
+      description: `${place.name} has a Review Rank Score of ${score}/100 based on ${place.user_ratings_total.toLocaleString()} reviews. See full trust analysis, ratings, and customer feedback.`,
+      openGraph: {
+        title: `${place.name} | ReviewRank`,
+        description: `Rated ${place.rating}★ across ${place.user_ratings_total.toLocaleString()} reviews. Review Rank Score: ${score}/100.`,
+      },
+    };
+  } catch {
+    return {};
+  }
 }
 
 const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
@@ -88,8 +110,47 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
   const tierStyle = getTrustTierStyle(tier);
   const insights = getBusinessInsights(place.rating, place.user_ratings_total, category);
 
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://reviewrank.app';
+
+  const localBusinessJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: place.name,
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: place.rating,
+      reviewCount: place.user_ratings_total,
+      bestRating: 5,
+      worstRating: 1,
+    },
+    address: place.formatted_address
+      ? { '@type': 'PostalAddress', streetAddress: place.formatted_address }
+      : undefined,
+    telephone: place.formatted_phone_number || undefined,
+    url: websiteUrl || mapsUrl,
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: siteUrl },
+      { '@type': 'ListItem', position: 2, name: 'Results', item: `${siteUrl}/results` },
+      { '@type': 'ListItem', position: 3, name: place.name, item: `${siteUrl}/business/${place.place_id}` },
+    ],
+  };
+
   return (
     <div className="relative min-h-screen bg-[#FAF7F0]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <ClientTracker
         event="business_viewed"
         placeId={place.place_id}

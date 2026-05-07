@@ -36,18 +36,32 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'ReviewRank — Find the Places Locals Trust Most',
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://reviewrank.app'
+  ),
+  title: {
+    default: 'ReviewRank — Find the Places Locals Trust Most',
+    template: '%s | ReviewRank',
+  },
   description:
-    'Discover top-ranked local businesses using a smart scoring algorithm that weighs both rating quality and review volume.',
+    'Find trusted local businesses ranked by review quality, volume, and consistency — not just star averages. No paid placements.',
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
     apple: '/favicon.svg',
   },
   openGraph: {
-    title: 'ReviewRank',
-    description: 'Find the places locals trust most, ranked by real customer signals.',
+    title: 'ReviewRank — Find the Places Locals Trust Most',
+    description: 'Find the places locals trust most, ranked by real customer review signals.',
     type: 'website',
+    siteName: 'ReviewRank',
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'ReviewRank' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ReviewRank — Find the Places Locals Trust Most',
+    description: 'Find trusted local businesses ranked by review quality and volume.',
+    images: ['/opengraph-image'],
   },
 };
 

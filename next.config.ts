@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               // Allow connect from self + Capacitor bridge origins + Google APIs
-              `connect-src 'self' ${CAPACITOR_ORIGINS} https://places.googleapis.com https://maps.googleapis.com`,
+              `connect-src 'self' ${CAPACITOR_ORIGINS} https://places.googleapis.com https://maps.googleapis.com https://us.i.posthog.com https://app.posthog.com`,
               "img-src 'self' https://maps.googleapis.com https://lh3.googleusercontent.com data: blob:",
               // frame-ancestors replaces X-Frame-Options
               "frame-ancestors 'none'",

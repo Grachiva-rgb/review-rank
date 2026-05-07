@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { searchPlaces } from '@/lib/places';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
@@ -14,6 +15,31 @@ interface ResultsPageProps {
 
 const MAX_QUERY_LENGTH = 200;
 const MAX_LABEL_LENGTH = 100; // location / category display strings
+
+export async function generateMetadata({ searchParams }: ResultsPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const category = (params.category || '').slice(0, MAX_LABEL_LENGTH).trim();
+  const location = (params.location || '').slice(0, MAX_LABEL_LENGTH).trim();
+  const q = (params.q || '').slice(0, MAX_LABEL_LENGTH).trim();
+
+  if (category && location) {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    return {
+      title: `Best ${cap(category)} in ${location} | ReviewRank`,
+      description: `Find trusted ${category} in ${location} ranked by review quality, volume, and consistency — not paid placements or star averages alone.`,
+    };
+  }
+  if (q) {
+    return {
+      title: `${q} Rankings | ReviewRank`,
+      description: `Discover top-ranked results for "${q}" scored by real customer review signals.`,
+    };
+  }
+  return {
+    title: 'Local Business Rankings | ReviewRank',
+    description: 'Find trusted local businesses ranked by review quality, volume, and consistency.',
+  };
+}
 
 export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   const params = await searchParams;
