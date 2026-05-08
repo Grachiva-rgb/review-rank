@@ -55,6 +55,7 @@ export default async function CategoryCityPage({ params }: PageProps) {
 
   try {
     places = await searchPlaces(`${cat.searchQuery} in ${city.searchName}`);
+    places.sort((a, b) => b.review_rank_score - a.review_rank_score);
   } catch {
     fetchError = true;
   }
