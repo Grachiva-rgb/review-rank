@@ -3,6 +3,7 @@
 import { useState, useRef, FormEvent, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchHistory, useLastLocation } from '@/hooks/useSearchHistory';
+import { useCompare } from '@/hooks/useCompare';
 
 interface LocationSuggestion {
   label: string;
@@ -23,6 +24,7 @@ export default function SearchForm({
   const router = useRouter();
   const lastLocation = useLastLocation();
   const { recents, saveSearch } = useSearchHistory();
+  const { clearCompare } = useCompare();
 
   const [gpsLoading, setGpsLoading]     = useState(false);
   const [gpsError, setGpsError]         = useState('');
@@ -131,6 +133,8 @@ export default function SearchForm({
 
     // Persist to history
     saveSearch(cat, gpsCoords ? 'Current location' : loc);
+
+    clearCompare();
 
     if (gpsCoords) {
       router.push(
