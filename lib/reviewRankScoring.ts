@@ -321,7 +321,8 @@ function buildExplanations(a: ExplainArgs): string[] {
 // Intentionally labelled as "above/below average" (not "trending up/down") because
 // we are comparing two snapshots within the same API call, not tracking change over time.
 
-export type TrendSignal = 'above_average' | 'below_average' | 'stable' | 'insufficient_data';
+export type TrendSignal = 'above_average' | 'below_average' | 'stable' | 'insufficient_data'
+  | 'fast_rising' | 'trending_up' | 'trending_down';
 
 export function computeTrendSignal(
   reviewCount: number,
@@ -337,11 +338,64 @@ export function computeTrendSignal(
 
 export function getTrendLabel(signal: TrendSignal): string {
   switch (signal) {
-    case 'above_average': return 'Recent reviews above avg';
-    case 'below_average': return 'Recent reviews below avg';
-    case 'stable': return 'Stable';
+    case 'above_average':    return 'Recent reviews above avg';
+    case 'below_average':    return 'Recent reviews below avg';
+    case 'stable':           return 'Stable';
     case 'insufficient_data': return 'Not enough data';
+    case 'fast_rising':      return 'Fast Rising';
+    case 'trending_up':      return 'Trending Up';
+    case 'trending_down':    return 'Trending Down';
   }
+}
+
+/**
+ * Enhanced trend for hospitality categories that have Tripadvisor data.
+ * Combines the Google sentiment signal with TA awards and volume depth.
+ *
+ * Returns an extended TrendSignal plus an array of plain-English driver strings
+ * for use in the UI (compare page, business detail page).
+ */
+export function computeMultiSourceTrend(
+  reviewCount: number,
+  sentimentComp: number,
+  bayesianComp: number,
+  ta?: { rating: number; reviewCount: number; awards?: string[] } | null
+): { signal: TrendSignal; drivers: string[] } {
+  const base = computeTrendSignal(reviewCount, sentimentComp, bayesianComp);
+  const drivers: string[] = [];
+  let boost = 0;
+
+  if (ta) {
+    const hasRecentAward = ta.awards?.some((a) =>
+      /2025|2024/.test(a) && /travelers|travellers/i.test(a)
+    );
+    if (hasRecentAward) {
+      boost += 3;
+      drivers.push("Travelers' Choice award (recent year)");
+    }
+    if (ta.reviewCount > 1000 && ta.rating >= 4.5) {
+      boost += 1;
+      drivers.push('Strong traveler reputation depth on Tripadvisor');
+    }
+  }
+
+  if (base === 'above_average' || base === 'stable') {
+    drivers.unshift('Recent Google reviews trending positive');
+  }
+
+  const diff = reviewCount >= 5 ? sentimentComp - bayesianComp : 0;
+  const composite = diff + boost;
+
+  let signal: TrendSignal;
+  if (composite >= 18) signal = 'fast_rising';
+  else if (composite >= 8) signal = 'trending_up';
+  else if (composite >= -8) signal = 'stable';
+  else if (composite >= -18) signal = 'below_average';
+  else signal = 'trending_down';
+
+  if (reviewCount < 5 && !ta) signal = 'insufficient_data';
+
+  return { signal, drivers };
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────

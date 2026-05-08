@@ -120,6 +120,7 @@ export type BusinessCategory =
   | 'home_services'
   | 'wellness'
   | 'food'
+  | 'hospitality'
   | 'general';
 
 export function detectCategory(query: string): BusinessCategory {
@@ -144,6 +145,8 @@ export function detectCategory(query: string): BusinessCategory {
     return 'wellness';
   if (/restaurant|cafe|coffee|pizza|sushi|taco|burger|food|diner|bistro|bakery|ramen|bbq|steakhouse/.test(q))
     return 'food';
+  if (/hotel|motel|resort|inn|suites|lodge|accommodation|bed and breakfast|b&b|airbnb|hostel|attraction|museum|park|theme park|zoo|aquarium|tour|tourism/.test(q))
+    return 'hospitality';
   return 'general';
 }
 
@@ -164,8 +167,9 @@ const CATEGORY_TERMS: Record<
   roofing:    { group: 'homeowners', value: 'quality workmanship and follow-through' },
   home_services: { group: 'homeowners', value: 'reliable work and fair pricing' },
   wellness:   { group: 'clients', value: 'consistent quality and friendly service' },
-  food:       { group: 'customers', value: 'consistent quality and experience' },
-  general:    { group: 'customers', value: 'consistent service quality' },
+  food:        { group: 'customers', value: 'consistent quality and experience' },
+  hospitality: { group: 'travelers', value: 'exceptional stays and memorable experiences' },
+  general:     { group: 'customers', value: 'consistent service quality' },
 };
 
 export function getTrustSummary(
@@ -251,6 +255,11 @@ const RANKING_EXPLANATION: Record<
     strong: 'Ranks highly for food quality and consistent dining experience based on public review signals.',
     solid:  'Strong review history with positive signals around food quality and attentive service.',
     early:  'Building a reputation — early reviews suggest quality food and a welcoming atmosphere.',
+  },
+  hospitality: {
+    strong: 'Ranks highly for exceptional guest experience and traveler satisfaction based on public review signals.',
+    solid:  'Strong review history with positive signals around quality accommodations and attentive service.',
+    early:  'Building a reputation — early traveler reviews suggest a welcoming experience worth considering.',
   },
   general: {
     strong: 'Ranks highly for consistent service quality based on public review signals.',
@@ -482,6 +491,23 @@ export function getBusinessInsights(
         'Anyone looking for a reliable dining experience with consistent quality.',
         'Diners who want to avoid disappointing meals by choosing proven local spots.',
         'Those seeking a well-reviewed option for a meal worth the trip.',
+      ],
+    },
+    hospitality: {
+      praise: [
+        'Travelers consistently praise the quality of accommodations, attentive staff, and memorable experiences.',
+        'Guests highlight comfortable surroundings, helpful service, and value for the stay.',
+        'Early visitors note a welcoming atmosphere and attention to detail.',
+      ],
+      considerations: [
+        'Peak seasons and special events can affect availability and pricing — booking early is recommended.',
+        'Some travelers note variability in room quality or service during high-demand periods.',
+        'Limited review history — early feedback may not reflect settled operations.',
+      ],
+      bestFor: [
+        'Travelers seeking a trusted accommodation or experience backed by consistent guest reviews.',
+        'Those who want to make confident booking decisions using verified traveler signals.',
+        'Anyone planning a trip who values reputation intelligence over advertising.',
       ],
     },
     general: {

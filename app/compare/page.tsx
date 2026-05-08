@@ -138,6 +138,35 @@ function BusinessColumn({
         </div>
       )}
 
+      {/* Tripadvisor signal row */}
+      {place.ta_data && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-[#5A4A3F] uppercase tracking-widest">Tripadvisor</p>
+          <div className="rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-3 py-2.5 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#7A6B63]">TA Rating</span>
+              <span className="font-mono font-semibold text-[#00AA6C]">
+                {place.ta_data.rating.toFixed(1)}★ · {place.ta_data.reviewCount.toLocaleString()} reviews
+              </span>
+            </div>
+            {place.multi_source_score && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#7A6B63]">Platform alignment</span>
+                <span className="font-mono text-[#241C15]">{place.multi_source_score.platformConsistency}%</span>
+              </div>
+            )}
+            {place.ta_data.travelerRanking && (
+              <div className="text-[10px] text-[#7A6B63] leading-relaxed">{place.ta_data.travelerRanking}</div>
+            )}
+            {place.ta_data.awards?.map((award, i) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                ★ {award}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Explanations */}
       {place.score_explanations?.length > 0 && (
         <div className="space-y-1.5">
@@ -202,10 +231,25 @@ function comparisonInsight(a: PlaceDetail, b: PlaceDetail): string {
   const [topDriver] = diffs[0];
 
   const scoreDiff = (higher.review_rank_score - lower.review_rank_score).toFixed(0);
+
+  // TA cross-platform signal
+  const higherTA = higher.ta_data;
+  const lowerTA  = lower.ta_data;
+  if (higherTA && lowerTA) {
+    const taAgrees = higherTA.rating >= lowerTA.rating;
+    if (taAgrees && higher.multi_source_score?.confidence === 'high') {
+      return `${higher.name} ranks ${scoreDiff} points higher with stronger scores on both Google and Tripadvisor — a consistent cross-platform trust signal.`;
+    }
+    if (!taAgrees) {
+      return `${higher.name} scores ${scoreDiff} points higher overall, primarily from ${topDriver}. Note: Tripadvisor rates ${lower.name} higher — consider checking both platforms.`;
+    }
+  }
+  if (higherTA && !lowerTA) {
+    return `${higher.name} scores ${scoreDiff} points higher and has Tripadvisor enrichment providing additional traveler trust signals.`;
+  }
+
   return `${higher.name} scores ${scoreDiff} points higher, driven primarily by stronger ${topDriver}. ${
-    diffs[0][1] > 20
-      ? `The gap on this signal is significant.`
-      : `The overall difference is moderate.`
+    diffs[0][1] > 20 ? `The gap on this signal is significant.` : `The overall difference is moderate.`
   }`;
 }
 

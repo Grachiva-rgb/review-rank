@@ -1,6 +1,8 @@
 import { Place, PlaceDetail, NormalizedBusiness } from './types';
-import { calculateSmartScore, MIN_DISPLAY_RATING } from './ranking';
+import { calculateSmartScore, MIN_DISPLAY_RATING, detectCategory } from './ranking';
 import { calculateReviewRankScore, BusinessReview, computeTrendSignal, getTrendLabel } from './reviewRankScoring';
+import { getCachedTAData } from './tripadvisor';
+import { computeMultiSourceScore } from './multiSourceScoring';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -248,6 +250,19 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     rrs.componentScores.bayesian
   );
 
+  const category = detectCategory(displayName?.text ?? '');
+
+  // Fetch TA enrichment from Supabase cache (non-blocking — null on any failure)
+  const taData = await getCachedTAData(placeId).catch(() => null);
+
+  const multiSourceScore = computeMultiSourceScore(
+    rating,
+    reviewCount,
+    taData,
+    category,
+    rrs.finalScore
+  );
+
   return {
     place_id: p.id as string,
     name: displayName?.text ?? '',
@@ -273,11 +288,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     url: (p.googleMapsUri as string) || undefined,
     reviews,
     smart_score: calculateSmartScore(rating, reviewCount),
-    review_rank_score: rrs.finalScore,
+    review_rank_score: taData ? multiSourceScore.finalScore : rrs.finalScore,
     rank_label: rrs.rankLabel,
     score_explanations: rrs.explanations,
     score_components: rrs.componentScores,
     trend_signal: trendSignal,
     trend_label: getTrendLabel(trendSignal),
+    ta_data: taData ?? undefined,
+    multi_source_score: multiSourceScore,
   };
 }

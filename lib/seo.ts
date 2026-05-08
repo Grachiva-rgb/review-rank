@@ -111,6 +111,34 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     description:
       'Find trusted general contractors ranked by proven customer satisfaction across many reviews.',
   },
+  // ── Hospitality & Travel (Tripadvisor-enriched) ───────────────────────────
+  {
+    slug: 'hotels',
+    label: 'Hotel',
+    plural: 'Hotels',
+    searchQuery: 'hotel',
+    businessCategory: 'hospitality',
+    description:
+      'Compare hotels ranked by guest review quality and traveler trust signals across Google and Tripadvisor.',
+  },
+  {
+    slug: 'attractions',
+    label: 'Attraction',
+    plural: 'Attractions',
+    searchQuery: 'tourist attraction',
+    businessCategory: 'hospitality',
+    description:
+      'Discover top-rated local attractions ranked by visitor reviews, traveler sentiment, and trust signals.',
+  },
+  {
+    slug: 'resorts',
+    label: 'Resort',
+    plural: 'Resorts',
+    searchQuery: 'resort',
+    businessCategory: 'hospitality',
+    description:
+      'Find the most trusted resorts ranked by guest satisfaction across thousands of verified traveler reviews.',
+  },
 ];
 
 export const SEO_CITIES: SeoCity[] = [

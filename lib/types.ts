@@ -1,6 +1,51 @@
 import type { TrendSignal } from './reviewRankScoring';
 export type { TrendSignal };
 
+// ─── Tripadvisor / multi-source types ────────────────────────────────────────
+
+export interface TripadvisorBusinessData {
+  taLocationId: string;
+  rating: number;
+  reviewCount: number;
+  category: string;
+  travelerRanking?: string;   // e.g. "#4 of 3,102 Restaurants in Cleveland"
+  priceLevel?: string;        // '$' | '$$ - $$$' | '$$$$'
+  awards?: string[];          // ["Travelers' Choice 2025"]
+  subratings?: {
+    food?: number;
+    service?: number;
+    value?: number;
+    ambiance?: number;
+    cleanliness?: number;
+    rooms?: number;
+    location?: number;
+    sleepQuality?: number;
+  };
+  lastFetched?: string;       // ISO date
+}
+
+export type ReviewSourceName = 'google' | 'tripadvisor';
+
+export interface ReviewSource {
+  source: ReviewSourceName;
+  rating: number;
+  reviewCount: number;
+  confidenceWeight: number;   // 0.0–1.0
+  lastFetched?: string;
+}
+
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'single_source';
+
+export interface MultiSourceScore {
+  finalScore: number;
+  confidence: ConfidenceLevel;
+  confidenceReason: string;
+  platformConsistency: number;    // 0–100
+  sources: ReviewSource[];
+  isHospitalityCategory: boolean;
+  travelersChoiceAward: boolean;
+}
+
 export interface Place {
   place_id: string;
   name: string;
@@ -42,6 +87,10 @@ export interface Place {
   trend_signal?: TrendSignal;
   /** Human-readable label for trend_signal. */
   trend_label?: string;
+  /** Tripadvisor data when available from the background cache. */
+  ta_data?: TripadvisorBusinessData;
+  /** Multi-source score blending Google + Tripadvisor when ta_data is present. */
+  multi_source_score?: MultiSourceScore;
 }
 
 export interface PlaceDetail {
@@ -89,6 +138,8 @@ export interface PlaceDetail {
   };
   trend_signal?: TrendSignal;
   trend_label?: string;
+  ta_data?: TripadvisorBusinessData;
+  multi_source_score?: MultiSourceScore;
 }
 
 export type SortFilter = 'smart_score' | 'rating' | 'reviews' | 'rising_stars';

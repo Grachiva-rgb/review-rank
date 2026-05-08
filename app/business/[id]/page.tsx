@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton';
 import NavLogo from '@/components/NavLogo';
 import ClientTracker from '@/components/ClientTracker';
 import SaveButton from '@/components/SaveButton';
+import TripadvisorPanel from '@/components/TripadvisorPanel';
 import {
   detectCategory,
   getTrustTierFromRRS,
@@ -374,6 +375,11 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
             </p>
           </div>
 
+          {/* Tripadvisor Panel — only shown when TA data is cached for this business */}
+          {place.ta_data && place.multi_source_score && (
+            <TripadvisorPanel ta={place.ta_data} multiScore={place.multi_source_score} />
+          )}
+
           {/* Reviews */}
           {place.reviews && place.reviews.length > 0 ? (
             <div>
@@ -437,10 +443,11 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
 
           <div className="mt-10 pt-6 border-t border-[#EDE8E3] text-center space-y-1">
             <p className="text-xs text-[#7A6B63] font-mono">
-              Data sourced from Google Places API · ReviewRank Smart Score
+              Data sourced from Google Places API{place.ta_data ? ' · Tripadvisor' : ''} · ReviewRank Smart Score
             </p>
             <p className="text-xs text-[#9A8C85]">
               Rankings are based on public review signals only. No paid placements.
+              {place.ta_data && ' Tripadvisor is one of multiple reputation signals — scores are not reproduced from Tripadvisor\'s ranking algorithm.'}
             </p>
           </div>
         </main>
