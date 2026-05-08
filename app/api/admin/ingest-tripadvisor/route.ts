@@ -34,15 +34,27 @@ function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
+function isAuthorized(request: Request): boolean {
+  const bearer = request.headers.get('authorization')?.replace('Bearer ', '').trim();
+  // Accept ADMIN_SECRET (manual calls) or CRON_SECRET (Vercel cron scheduler)
+  if (process.env.ADMIN_SECRET && bearer === process.env.ADMIN_SECRET) return true;
+  if (process.env.CRON_SECRET && bearer === process.env.CRON_SECRET) return true;
+  return false;
+}
+
 interface StaleRow {
   google_place_id: string;
   ta_location_id: string | null;
 }
 
+// Also expose as GET so Vercel Cron can invoke it (crons use GET by default)
+export async function GET(request: Request): Promise<NextResponse> {
+  return POST(request);
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
-  // Auth
-  const secret = request.headers.get('authorization')?.replace('Bearer ', '').trim();
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+  // Auth: accepts ADMIN_SECRET (manual) or CRON_SECRET (Vercel scheduler)
+  if (!isAuthorized(request)) {
     return unauthorized();
   }
 

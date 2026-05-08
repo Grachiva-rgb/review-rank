@@ -13,8 +13,8 @@ const EXAMPLE_SEARCHES = [
   { label: 'Reliable plumber', category: 'plumber' },
   { label: 'Most trusted dentist', category: 'dentist' },
   { label: 'Top-rated HVAC repair', category: 'hvac repair' },
-  { label: 'Trusted electrician', category: 'electrician' },
-  { label: 'Reputable family lawyer', category: 'family lawyer' },
+  { label: 'Best hotel downtown', category: 'hotel' },
+  { label: 'Top-rated restaurant', category: 'restaurant' },
 ];
 
 const HOW_WE_RANK = [
@@ -59,12 +59,15 @@ const websiteJsonLd = {
 
 // Top category/city combos for the discovery section
 const FEATURED_COMBOS = [
-  { cat: SEO_CATEGORIES[0], city: SEO_CITIES[0] },  // plumbers / Cleveland
-  { cat: SEO_CATEGORIES[1], city: SEO_CITIES[1] },  // dentists / Columbus
-  { cat: SEO_CATEGORIES[2], city: SEO_CITIES[2] },  // hvac / Akron
-  { cat: SEO_CATEGORIES[4], city: SEO_CITIES[10] }, // mechanics / Nashville
-  { cat: SEO_CATEGORIES[6], city: SEO_CITIES[12] }, // restaurants / Atlanta
-  { cat: SEO_CATEGORIES[9], city: SEO_CITIES[6] },  // contractors / Detroit
+  { cat: SEO_CATEGORIES[0],  city: SEO_CITIES[0] },   // plumbers / Cleveland
+  { cat: SEO_CATEGORIES[1],  city: SEO_CITIES[1] },   // dentists / Columbus
+  { cat: SEO_CATEGORIES[4],  city: SEO_CITIES[10] },  // mechanics / Nashville
+  { cat: SEO_CATEGORIES[6],  city: SEO_CITIES[12] },  // restaurants / Atlanta
+  { cat: SEO_CATEGORIES[10], city: SEO_CITIES[10] },  // hotels / Nashville
+  { cat: SEO_CATEGORIES[11], city: SEO_CITIES[7] },   // attractions / Chicago
+  { cat: SEO_CATEGORIES[10], city: SEO_CITIES[19] },  // hotels / Los Angeles
+  { cat: SEO_CATEGORIES[11], city: SEO_CITIES[12] },  // attractions / Atlanta
+  { cat: SEO_CATEGORIES[6],  city: SEO_CITIES[7] },   // restaurants / Chicago
 ];
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -104,7 +107,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#2F6F4E]/20 bg-[#2F6F4E]/5 px-4 py-1.5 mb-8">
             <span className="h-1.5 w-1.5 rounded-full bg-[#2F6F4E]" />
-            <span className="text-xs text-[#2F6F4E] font-mono">Mechanics · Dentists · HVAC · Lawyers · Restaurants · and more</span>
+            <span className="text-xs text-[#2F6F4E] font-mono">Mechanics · Dentists · Restaurants · Hotels · Attractions · and more</span>
           </div>
 
           <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl text-[#241C15] leading-tight mb-5 max-w-3xl">
@@ -140,7 +143,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="max-w-3xl mx-auto">
             <h2 className="font-display text-xl text-[#241C15] mb-1 text-center">Popular searches</h2>
             <p className="text-xs text-[#7A6B63] text-center mb-6">Pre-ranked lists for common categories and cities</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">
               {FEATURED_COMBOS.map(({ cat, city }) => (
                 <Link
                   key={`${cat.slug}-${city.slug}`}

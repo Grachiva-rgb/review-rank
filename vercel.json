@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/ingest-tripadvisor",
+      "schedule": "0 3 * * 1"
+    }
+  ]
+}
