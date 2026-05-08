@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deliverLeadToPartners } from '@/lib/leadDelivery';
 import { normalizePartnerCategory } from '@/lib/categories';
+import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 // Loose phone pattern — accepts common formats like (555) 000-0000, +1 555 000 0000, etc.
 const PHONE_RE    = /^[\d\s\-\(\)\+\.]{7,20}$/;
@@ -11,6 +12,11 @@ const MAX_PHONE = 30;
 const MAX_DESC  = 600;
 
 export async function POST(request: NextRequest) {
+  const { allowed } = rateLimit(`lead-request:${clientIp(request)}`, 5, 3_600_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -125,9 +131,11 @@ export async function POST(request: NextRequest) {
         console.error('[lead-request] delivery error:', err);
       }
     } else {
-      // Supabase not configured — log to server console
+      // Supabase not configured — log category/business info only (no PII)
       console.log('[lead-request] New lead (Supabase not configured):', {
-        ...sanitized,
+        category: sanitized.category,
+        business_name: sanitized.business_name,
+        business_place_id: sanitized.business_place_id,
         submitted_at: new Date().toISOString(),
       });
     }

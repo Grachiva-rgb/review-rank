@@ -124,6 +124,8 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
           // `partners` table (e.g. "auto-repair", "general-contractor").
           // The API normalizes again server-side for defense in depth.
           category:           businessCategoryToPartnerCategory(category),
+          // Geographic coordinates for partner proximity matching
+          ...(lat != null && lng != null ? { business_lat: lat, business_lng: lng } : {}),
         }),
       });
 
@@ -208,6 +210,7 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                       type="text"
                       placeholder="Jane Smith"
                       autoComplete="name"
+                      maxLength={120}
                       className="min-h-[44px] w-full rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-3 py-2.5 text-sm text-[#241C15] placeholder:text-[#C2B8B0] focus:outline-none focus:ring-2 focus:ring-[#8B5E3C]/30"
                     />
                   </div>
@@ -221,6 +224,7 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                       type="tel"
                       placeholder="(555) 000-0000"
                       autoComplete="tel"
+                      maxLength={30}
                       className="min-h-[44px] w-full rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-3 py-2.5 text-sm text-[#241C15] placeholder:text-[#C2B8B0] focus:outline-none focus:ring-2 focus:ring-[#8B5E3C]/30"
                     />
                   </div>
@@ -233,6 +237,7 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                       ref={descRef}
                       placeholder="Briefly describe the job or service you're looking for..."
                       rows={3}
+                      maxLength={600}
                       className="w-full resize-none rounded-xl border border-[#EDE8E3] bg-[#FAF7F0] px-3 py-2.5 text-sm text-[#241C15] placeholder:text-[#C2B8B0] focus:outline-none focus:ring-2 focus:ring-[#8B5E3C]/30"
                     />
                   </div>

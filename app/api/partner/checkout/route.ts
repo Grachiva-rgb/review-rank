@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripe, isStripeConfigured, PARTNER_MONTHLY_CENTS } from '@/lib/stripe';
 import { isSupabaseConfigured, sbInsert } from '@/lib/supabase';
 import { normalizePartnerCategory } from '@/lib/categories';
+import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 const MAX_STR = 120;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATE_RE = /^[A-Za-z]{2}$/;
 
 export async function POST(req: NextRequest) {
+  const { allowed } = rateLimit(`partner-checkout:${clientIp(req)}`, 5, 1_800_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   if (!isStripeConfigured()) {
     return NextResponse.json(
       { error: 'Partner program is not yet configured on this environment.' },
@@ -68,9 +74,14 @@ export async function POST(req: NextRequest) {
   // Use a configured site URL rather than the request Origin header.
   // Trusting Origin would allow an attacker to forge the header and set
   // Stripe's success/cancel URLs to an arbitrary domain.
-  const origin =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
-    'https://review-rank.vercel.app';
+  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+  if (!origin) {
+    console.error('[partner/checkout] NEXT_PUBLIC_SITE_URL is not configured');
+    return NextResponse.json(
+      { error: 'Checkout is not properly configured. Please contact support.' },
+      { status: 503 }
+    );
+  }
   const stripe = getStripe();
 
   try {

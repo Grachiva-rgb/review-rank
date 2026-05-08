@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getPlaceDetails } from '@/lib/places';
+import { jsonLd } from '@/lib/jsonLd';
 import Link from 'next/link';
 import StarRating from '@/components/StarRating';
 import SmartScoreBadge from '@/components/SmartScoreBadge';
@@ -146,11 +147,11 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
     <div className="relative min-h-screen bg-[#FAF7F0]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(localBusinessJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbJsonLd) }}
       />
       <ClientTracker
         event="business_viewed"

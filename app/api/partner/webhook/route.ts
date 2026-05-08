@@ -129,16 +129,3 @@ async function markPartnerStatus(subscriptionId: string, status: 'active' | 'pas
   );
 }
 
-// GET used by ops for quick sanity check that the route is mounted.
-export async function GET() {
-  const rows = isSupabaseConfigured()
-    ? await sbSelect<{ count: number }>('partners', 'select=id&limit=1').then(
-        (r) => ({ supabase: 'ok', sample: r.length })
-      ).catch((e: unknown) => ({ supabase: 'error', error: String(e) }))
-    : { supabase: 'not-configured' };
-  return NextResponse.json({
-    ok: true,
-    stripe: isStripeConfigured() ? 'configured' : 'not-configured',
-    ...rows,
-  });
-}

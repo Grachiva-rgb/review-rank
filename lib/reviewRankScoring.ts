@@ -184,12 +184,36 @@ export function calculateReviewRankScore(input: BusinessScoreInput): BusinessSco
   const sentiment = sentimentScore(reviews);
   const consistency = consistencyScore(reviews);
 
+  // ── Evidence blending ───────────────────────────────────────────────────────
+  // Sentiment and consistency are computed from at most 5 recent reviews
+  // (the Google Places API limit). For a business with thousands of reviews,
+  // those 5 samples represent < 0.1% of its track record — a single bad recent
+  // review should not outweigh years of 4.8★ performance.
+  //
+  // We blend the noisy 5-review components toward stable priors using
+  // sqrt(sample / total) as the evidence weight:
+  //   5 of  5  reviews → weight = 1.00 (sample covers all reviews)
+  //   5 of 50  reviews → weight = 0.32
+  //   5 of 500 reviews → weight = 0.10
+  //   5 of 4000 reviews → weight = 0.035
+  //
+  // Priors:
+  //   Sentiment prior = overall aggregate rating mapped to 0–100 (same scale as sentimentScore)
+  //   Consistency prior = 75 (slightly optimistic; high-rated businesses tend to be consistent)
+  const sampleSize = reviews.length;
+  const sampleEvidence = sampleSize > 0
+    ? Math.min(1.0, Math.sqrt(sampleSize / Math.max(totalReviewCount, sampleSize)))
+    : 0;
+  const sentimentPrior = clamp(((rating - 3.0) / 2.0) * 100, 0, 100);
+  const blendedSentiment   = sentiment   * sampleEvidence + sentimentPrior * (1 - sampleEvidence);
+  const blendedConsistency = consistency * sampleEvidence + 75             * (1 - sampleEvidence);
+
   // Weighted combination
   const weighted =
     bayesian * WEIGHTS.bayesian +
     volume * WEIGHTS.volume +
-    sentiment * WEIGHTS.sentiment +
-    consistency * WEIGHTS.consistency;
+    blendedSentiment * WEIGHTS.sentiment +
+    blendedConsistency * WEIGHTS.consistency;
 
   // Apply fraud confidence multiplier (1.0 in MVP)
   const fraudAdj = weighted * fraudConfidenceMultiplier(reviews);
@@ -204,16 +228,16 @@ export function calculateReviewRankScore(input: BusinessScoreInput): BusinessSco
     componentScores: {
       bayesian: round1(bayesian),
       volume: round1(volume),
-      sentiment: round1(sentiment),
-      consistency: round1(consistency),
+      sentiment: round1(blendedSentiment),
+      consistency: round1(blendedConsistency),
     },
     explanations: buildExplanations({
       rating,
       totalReviewCount,
       bayesian,
       volume,
-      sentiment,
-      consistency,
+      sentiment: blendedSentiment,
+      consistency: blendedConsistency,
       reviewsAvailable: reviews.length,
       minimumReviewThreshold,
     }),

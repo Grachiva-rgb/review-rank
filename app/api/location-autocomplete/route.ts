@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 export async function GET(req: NextRequest) {
+  const { allowed } = rateLimit(`location-autocomplete:${clientIp(req)}`, 40, 60_000);
+  if (!allowed) {
+    return NextResponse.json([], { status: 429 });
+  }
   const q = req.nextUrl.searchParams.get('q')?.trim();
   if (!q || q.length < 2 || q.length > 200) return NextResponse.json([]);
 

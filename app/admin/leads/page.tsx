@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import NavLogo from '@/components/NavLogo';
 
-// Protect with ?secret=<ADMIN_SECRET> — same as the reports admin page.
-// Access via: /admin/leads?secret=<ADMIN_SECRET>
+// Access to this page is protected by HTTP Basic Auth in middleware.ts.
+// Any request reaching this component is already authenticated.
 
 interface Lead {
   id: string;
@@ -58,27 +58,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   general:       'General',
 };
 
-interface AdminLeadsPageProps {
-  searchParams: Promise<{ secret?: string }>;
-}
-
-export default async function AdminLeadsPage({ searchParams }: AdminLeadsPageProps) {
-  const { secret } = await searchParams;
-  const adminSecret = process.env.ADMIN_SECRET;
-
-  if (!adminSecret || secret !== adminSecret) {
-    return (
-      <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-[#7A6B63] text-sm">Access denied.</p>
-          <Link href="/" className="text-xs text-[#8B5E3C] hover:text-[#6B4A2F] mt-2 inline-block">
-            ← Back to search
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+export default async function AdminLeadsPage() {
   const leads = await getLeads();
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -96,7 +76,7 @@ export default async function AdminLeadsPage({ searchParams }: AdminLeadsPagePro
           <Link href="/"><NavLogo size="sm" /></Link>
           <span className="text-[#D9CEC8]">/</span>
           <Link
-            href={`/admin/reports?secret=${secret}`}
+            href="/admin/reports"
             className="text-sm text-[#7A6B63] hover:text-[#8B5E3C] transition-colors"
           >
             Reports

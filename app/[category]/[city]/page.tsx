@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { jsonLd } from '@/lib/jsonLd';
 import Link from 'next/link';
 import { searchPlaces } from '@/lib/places';
 import { SEO_CATEGORIES, SEO_CITIES, getCategoryBySlug, getCityBySlug } from '@/lib/seo';
 import NavLogo from '@/components/NavLogo';
-import SmartScoreBadge from '@/components/SmartScoreBadge';
-import StarRating from '@/components/StarRating';
+import BusinessCard from '@/components/BusinessCard';
+import CompareBar from '@/components/CompareBar';
 
 // Revalidate each page once per day (ISR)
 export const revalidate = 86400;
@@ -97,12 +98,12 @@ export default async function CategoryCityPage({ params }: PageProps) {
     <div className="min-h-screen bg-[#FAF7F0]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbJsonLd) }}
       />
       {itemListJsonLd && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLd(itemListJsonLd) }}
         />
       )}
 
@@ -173,51 +174,16 @@ export default async function CategoryCityPage({ params }: PageProps) {
         ) : (
           <div className="space-y-4">
             {places.map((place, index) => (
-              <Link
+              <BusinessCard
                 key={place.place_id}
-                href={`/business/${place.place_id}?cat=${encodeURIComponent(cat.searchQuery)}`}
-                className="block rounded-2xl border border-[#EDE8E3] bg-white px-5 py-4 shadow-sm hover:border-[#8B5E3C]/40 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start gap-4">
-                  {/* Rank number */}
-                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#FAF7F0] border border-[#EDE8E3] text-sm font-mono text-[#8B5E3C] font-bold">
-                    {index + 1}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="font-display text-lg text-[#241C15] leading-snug truncate">
-                          {place.name}
-                        </h2>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <StarRating rating={place.rating} size="sm" />
-                          <span className="text-xs text-[#7A6B63]">
-                            {place.rating.toFixed(1)} · {place.user_ratings_total.toLocaleString()} reviews
-                          </span>
-                        </div>
-                        {place.formatted_address && (
-                          <p className="text-xs text-[#9A8C85] mt-1 truncate">
-                            {place.formatted_address}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex-shrink-0">
-                        <SmartScoreBadge score={place.review_rank_score} size="sm" />
-                      </div>
-                    </div>
-
-                    {place.score_explanations?.[0] && (
-                      <p className="text-xs text-[#7A6B63] mt-2 leading-relaxed">
-                        {place.score_explanations[0]}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Link>
+                place={place}
+                rank={index + 1}
+                category={cat.businessCategory}
+              />
             ))}
           </div>
         )}
+        <CompareBar />
 
         {/* How we rank callout */}
         <div className="mt-12 rounded-2xl border border-[#EDE8E3] bg-white p-6">

@@ -2,12 +2,15 @@
  * Central SEO data used by sitemap, robots, and category landing pages.
  */
 
+import type { BusinessCategory } from '@/lib/ranking';
+
 export interface SeoCategory {
   slug: string;
   label: string;
   plural: string;
-  searchQuery: string;   // sent to Google Places text search
-  description: string;  // used in meta description + page intro
+  searchQuery: string;       // sent to Google Places text search
+  description: string;       // used in meta description + page intro
+  businessCategory: BusinessCategory; // maps to ranking taxonomy for BusinessCard / QuoteButton
 }
 
 export interface SeoCity {
@@ -23,6 +26,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Plumber',
     plural: 'Plumbers',
     searchQuery: 'plumber',
+    businessCategory: 'plumbing',
     description:
       'Find trusted plumbers with high ratings and a proven track record of consistent customer feedback.',
   },
@@ -31,6 +35,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Dentist',
     plural: 'Dentists',
     searchQuery: 'dentist',
+    businessCategory: 'medical',
     description:
       'Discover top-rated dentists ranked by review quality, patient volume, and consistent care.',
   },
@@ -39,6 +44,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'HVAC Company',
     plural: 'HVAC Companies',
     searchQuery: 'hvac repair',
+    businessCategory: 'hvac',
     description:
       'Compare HVAC companies based on real customer signals — not just star averages.',
   },
@@ -47,6 +53,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Electrician',
     plural: 'Electricians',
     searchQuery: 'electrician',
+    businessCategory: 'electrical',
     description:
       'Find reliable electricians ranked by verified review volume and consistent ratings.',
   },
@@ -55,6 +62,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Auto Mechanic',
     plural: 'Auto Mechanics',
     searchQuery: 'auto mechanic',
+    businessCategory: 'automotive',
     description:
       'See which auto mechanics locals trust most, ranked by review quality and volume.',
   },
@@ -63,6 +71,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Roofing Contractor',
     plural: 'Roofing Contractors',
     searchQuery: 'roofing contractor',
+    businessCategory: 'roofing',
     description:
       'Find top-rated roofing contractors backed by high review counts and consistent customer feedback.',
   },
@@ -71,6 +80,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Restaurant',
     plural: 'Restaurants',
     searchQuery: 'restaurant',
+    businessCategory: 'food',
     description:
       'Discover the restaurants locals actually trust — ranked by review quality and volume.',
   },
@@ -79,6 +89,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Lawyer',
     plural: 'Lawyers',
     searchQuery: 'lawyer',
+    businessCategory: 'legal',
     description:
       'Find highly rated lawyers with a strong base of verified client reviews.',
   },
@@ -87,6 +98,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'Doctor',
     plural: 'Doctors',
     searchQuery: 'doctor',
+    businessCategory: 'medical',
     description:
       'Compare doctors and medical practices ranked by patient review quality and volume.',
   },
@@ -95,6 +107,7 @@ export const SEO_CATEGORIES: SeoCategory[] = [
     label: 'General Contractor',
     plural: 'General Contractors',
     searchQuery: 'general contractor',
+    businessCategory: 'home_services',
     description:
       'Find trusted general contractors ranked by proven customer satisfaction across many reviews.',
   },

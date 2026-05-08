@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import NavLogo from '@/components/NavLogo';
 
-// Protect this page with a simple secret key check.
-// Set ADMIN_SECRET in your environment to enable access.
-// Access via: /admin/reports?secret=<ADMIN_SECRET>
+// Access to this page is protected by HTTP Basic Auth in middleware.ts.
+// Any request reaching this component is already authenticated.
 
 interface ReportRequest {
   id: string;
@@ -46,27 +45,7 @@ async function getReportRequests(): Promise<ReportRequest[]> {
   }
 }
 
-interface AdminReportsPageProps {
-  searchParams: Promise<{ secret?: string }>;
-}
-
-export default async function AdminReportsPage({ searchParams }: AdminReportsPageProps) {
-  const { secret } = await searchParams;
-  const adminSecret = process.env.ADMIN_SECRET;
-
-  if (!adminSecret || secret !== adminSecret) {
-    return (
-      <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-[#7A6B63] text-sm">Access denied.</p>
-          <Link href="/" className="text-xs text-[#8B5E3C] hover:text-[#6B4A2F] mt-2 inline-block">
-            ← Back to search
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+export default async function AdminReportsPage() {
   const requests = await getReportRequests();
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 

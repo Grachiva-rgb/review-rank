@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
@@ -7,6 +8,11 @@ const MAX_EMAIL_LEN = 254;
 const MAX_NOTE_LEN = 1000;
 
 export async function POST(request: NextRequest) {
+  const { allowed } = rateLimit(`report-request:${clientIp(request)}`, 5, 3_600_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -70,13 +76,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unable to submit request. Please try again.' }, { status: 500 });
       }
     } else {
-      // Supabase not configured — log server-side only
+      // Supabase not configured — log business info only (no PII)
       console.log('[report-request] New submission (Supabase not configured):', {
         business_name: sanitized.business_name,
         business_place_id: sanitized.business_place_id,
-        owner_name: sanitized.owner_name,
-        owner_email: sanitized.owner_email,
-        note: sanitized.note,
         submitted_at: new Date().toISOString(),
       });
     }

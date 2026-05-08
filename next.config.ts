@@ -34,10 +34,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: '/(.*)',
+        // API and admin routes must never be cached; ISR pages manage their own caching
+        source: '/(api|admin)(.*)',
         headers: [
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
           { key: 'Pragma', value: 'no-cache' },
+        ],
+      },
+      {
+        source: '/(.*)',
+        headers: [
           // X-Frame-Options removed: Capacitor WebView renders the page inside a native
           // frame, so DENY would prevent the app from loading on iOS/Android.
           // Framing is still prevented via the CSP frame-ancestors directive below.

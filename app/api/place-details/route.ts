@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlaceDetails, normalizeBusiness } from '@/lib/places';
+import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 // Google Place IDs are alphanumeric with underscores/hyphens, typically 27 chars
 const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
 
 export async function GET(request: NextRequest) {
+  const { allowed } = rateLimit(`place-details:${clientIp(request)}`, 30, 60_000);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
+  }
   const searchParams = request.nextUrl.searchParams;
   const placeId = searchParams.get('id');
 

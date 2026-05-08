@@ -2,6 +2,7 @@ import SearchForm from '@/components/SearchForm';
 import NavLogo from '@/components/NavLogo';
 import Link from 'next/link';
 import { SEO_CATEGORIES, SEO_CITIES } from '@/lib/seo';
+import { jsonLd } from '@/lib/jsonLd';
 
 interface HomePageProps {
   searchParams: Promise<{ category?: string }>;
@@ -73,7 +74,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <main className="relative min-h-screen flex flex-col bg-[#FAF7F0]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLd(websiteJsonLd) }}
       />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(139,94,60,0.06),transparent)] pointer-events-none" />
 
