@@ -1,10 +1,11 @@
 /**
  * POST /api/admin/ingest-tripadvisor
+ * GET  /api/admin/ingest-tripadvisor  (Vercel Cron)
  *
  * Background ingestion job: fetches Tripadvisor data for one or more businesses
  * and stores results in the Supabase cache (tripadvisor_businesses + business_id_mapping).
  *
- * Auth: Bearer token === ADMIN_SECRET
+ * Auth: Bearer token === ADMIN_SECRET or CRON_SECRET
  * Rate: Only called by scheduled jobs or admin — not in any consumer request path.
  *
  * Body (JSON):
