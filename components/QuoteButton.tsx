@@ -1,8 +1,33 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { BusinessCategory } from '@/lib/ranking';
 import { businessCategoryToPartnerCategory } from '@/lib/categories';
+
+// ─── Module-level coverage cache ─────────────────────────────────────────────
+// Keyed by "category:lat1dp:lng1dp" (1 decimal ≈ 11 km precision).
+// All QuoteButton instances on the same page share this map, so we issue
+// at most one network request per unique category+area combination.
+const coverageCache = new Map<string, Promise<boolean>>();
+
+function cacheKey(category: string, lat?: number, lng?: number): string {
+  if (lat == null || lng == null) return category;
+  return `${category}:${lat.toFixed(1)}:${lng.toFixed(1)}`;
+}
+
+async function fetchCoverage(category: string, lat?: number, lng?: number): Promise<boolean> {
+  const params = new URLSearchParams({ category });
+  if (lat != null) params.set('lat', lat.toFixed(4));
+  if (lng != null) params.set('lng', lng.toFixed(4));
+  try {
+    const res = await fetch(`/api/partner-coverage?${params.toString()}`);
+    if (!res.ok) return false;
+    const data = await res.json() as { hasPartner?: boolean };
+    return data.hasPartner === true;
+  } catch {
+    return false;
+  }
+}
 
 // Categories eligible for lead generation
 const LEAD_ELIGIBLE: Set<BusinessCategory> = new Set([
@@ -31,20 +56,37 @@ interface QuoteButtonProps {
   businessName: string;
   businessId: string;
   category: BusinessCategory;
+  lat?: number;
+  lng?: number;
 }
 
-export default function QuoteButton({ businessName, businessId, category }: QuoteButtonProps) {
+export default function QuoteButton({ businessName, businessId, category, lat, lng }: QuoteButtonProps) {
   const [isOpen, setIsOpen]       = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState('');
+  // null = unknown (loading), true = show, false = hide
+  const [hasPartner, setHasPartner] = useState<boolean | null>(null);
 
   const nameRef  = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const descRef  = useRef<HTMLTextAreaElement>(null);
 
-  // Only render for eligible service categories
-  if (!LEAD_ELIGIBLE.has(category)) return null;
+  // Only eligible service categories can ever show the button
+  const isEligible = LEAD_ELIGIBLE.has(category);
+
+  useEffect(() => {
+    if (!isEligible) return;
+    const key = cacheKey(businessCategoryToPartnerCategory(category) ?? category, lat, lng);
+    if (!coverageCache.has(key)) {
+      coverageCache.set(key, fetchCoverage(businessCategoryToPartnerCategory(category) ?? category, lat, lng));
+    }
+    coverageCache.get(key)!.then(setHasPartner);
+  }, [isEligible, category, lat, lng]);
+
+  // Don't render if category is ineligible, or if coverage check is still
+  // pending (null) or confirmed false.
+  if (!isEligible || hasPartner !== true) return null;
 
   const ctaLabel = CATEGORY_CTA[category] ?? 'Request a Quote';
 

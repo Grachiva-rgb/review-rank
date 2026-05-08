@@ -135,12 +135,14 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
           ))}
         </ul>
 
-        {/* Lead gen CTA — only for eligible service categories with an established trust tier */}
+        {/* Lead gen CTA — only renders when an active partner covers this area */}
         {tier !== null && (
           <QuoteButton
             businessName={place.name}
             businessId={place.place_id}
             category={category}
+            lat={place.geometry.location.lat}
+            lng={place.geometry.location.lng}
           />
         )}
 
