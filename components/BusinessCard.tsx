@@ -5,6 +5,8 @@ import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
 import QuoteButton from './QuoteButton';
 import SaveButton from './SaveButton';
+import CompareButton from './CompareButton';
+import TrendBadge from './TrendBadge';
 
 interface BusinessCardProps {
   place: Place;
@@ -162,9 +164,12 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
         </div>
       </div>
 
-      {/* Score + save */}
-      <div className="flex-shrink-0 self-center flex flex-col items-center gap-2">
+      {/* Score + actions */}
+      <div className="flex-shrink-0 self-start flex flex-col items-center gap-2 pt-0.5">
         <SmartScoreBadge score={place.review_rank_score} />
+        {place.trend_signal && place.trend_signal !== 'insufficient_data' && (
+          <TrendBadge signal={place.trend_signal} label={place.trend_label ?? ''} />
+        )}
         <SaveButton
           size="sm"
           business={{
@@ -174,6 +179,15 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
             reviewCount: place.user_ratings_total,
             score: place.review_rank_score,
             address: place.formatted_address,
+            category: category,
+          }}
+        />
+        <CompareButton
+          size="sm"
+          business={{
+            placeId: place.place_id,
+            name: place.name,
+            score: place.review_rank_score,
             category: category,
           }}
         />

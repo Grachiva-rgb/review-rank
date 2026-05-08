@@ -286,6 +286,40 @@ function buildExplanations(a: ExplainArgs): string[] {
   return out;
 }
 
+// ─── Trend Signal ─────────────────────────────────────────────────────────────
+// A proxy trend derived from the difference between recent-review sentiment and
+// the long-run Bayesian-adjusted rating. No historical data required.
+//
+// sentiment >> bayesian → recent reviews are better than overall average → "above_average"
+// sentiment << bayesian → recent reviews are worse than overall average → "below_average"
+// otherwise → "stable"
+//
+// Intentionally labelled as "above/below average" (not "trending up/down") because
+// we are comparing two snapshots within the same API call, not tracking change over time.
+
+export type TrendSignal = 'above_average' | 'below_average' | 'stable' | 'insufficient_data';
+
+export function computeTrendSignal(
+  reviewCount: number,
+  sentimentComp: number,
+  bayesianComp: number
+): TrendSignal {
+  if (reviewCount < 5) return 'insufficient_data';
+  const diff = sentimentComp - bayesianComp;
+  if (diff > 15) return 'above_average';
+  if (diff < -15) return 'below_average';
+  return 'stable';
+}
+
+export function getTrendLabel(signal: TrendSignal): string {
+  switch (signal) {
+    case 'above_average': return 'Recent reviews above avg';
+    case 'below_average': return 'Recent reviews below avg';
+    case 'stable': return 'Stable';
+    case 'insufficient_data': return 'Not enough data';
+  }
+}
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 function clamp(n: number, min: number, max: number): number {

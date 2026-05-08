@@ -7,6 +7,7 @@ import { detectCategory, BusinessCategory } from '@/lib/ranking';
 import BusinessCard from './BusinessCard';
 import FilterBar from './FilterBar';
 import SearchForm from './SearchForm';
+import CompareBar from './CompareBar';
 import { track } from './PostHogProvider';
 
 interface ResultsClientProps {
@@ -225,6 +226,7 @@ export default function ResultsClient({
           )}
         </main>
       </div>
+      <CompareBar />
     </div>
   );
 }

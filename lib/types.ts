@@ -1,3 +1,6 @@
+import type { TrendSignal } from './reviewRankScoring';
+export type { TrendSignal };
+
 export interface Place {
   place_id: string;
   name: string;
@@ -28,6 +31,17 @@ export interface Place {
   score_explanations: string[];
   /** Rank tier label: Elite | Highly Trusted | Trusted | Established | Limited Reputation */
   rank_label: string;
+  /** Individual 0–100 sub-scores from the scoring model. */
+  score_components?: {
+    bayesian: number;
+    volume: number;
+    sentiment: number;
+    consistency: number;
+  };
+  /** Proxy trend derived from recent-review sentiment vs bayesian rating. */
+  trend_signal?: TrendSignal;
+  /** Human-readable label for trend_signal. */
+  trend_label?: string;
 }
 
 export interface PlaceDetail {
@@ -67,6 +81,14 @@ export interface PlaceDetail {
   review_rank_score: number;
   score_explanations: string[];
   rank_label: string;
+  score_components?: {
+    bayesian: number;
+    volume: number;
+    sentiment: number;
+    consistency: number;
+  };
+  trend_signal?: TrendSignal;
+  trend_label?: string;
 }
 
 export type SortFilter = 'smart_score' | 'rating' | 'reviews' | 'rising_stars';

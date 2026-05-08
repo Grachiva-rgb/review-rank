@@ -1,6 +1,6 @@
 import { Place, PlaceDetail, NormalizedBusiness } from './types';
 import { calculateSmartScore, MIN_DISPLAY_RATING } from './ranking';
-import { calculateReviewRankScore, BusinessReview } from './reviewRankScoring';
+import { calculateReviewRankScore, BusinessReview, computeTrendSignal, getTrendLabel } from './reviewRankScoring';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -134,6 +134,12 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       reviews,
     });
 
+    const trendSignal = computeTrendSignal(
+      reviewCount,
+      rrs.componentScores.sentiment,
+      rrs.componentScores.bayesian
+    );
+
     return {
       place_id: p.id as string,
       name: displayName?.text ?? '',
@@ -154,6 +160,9 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       review_rank_score: rrs.finalScore,
       rank_label: rrs.rankLabel,
       score_explanations: rrs.explanations,
+      score_components: rrs.componentScores,
+      trend_signal: trendSignal,
+      trend_label: getTrendLabel(trendSignal),
     };
   });
 }
@@ -233,6 +242,12 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     reviews: toBusinessReviews(rawReviews),
   });
 
+  const trendSignal = computeTrendSignal(
+    reviewCount,
+    rrs.componentScores.sentiment,
+    rrs.componentScores.bayesian
+  );
+
   return {
     place_id: p.id as string,
     name: displayName?.text ?? '',
@@ -261,5 +276,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     review_rank_score: rrs.finalScore,
     rank_label: rrs.rankLabel,
     score_explanations: rrs.explanations,
+    score_components: rrs.componentScores,
+    trend_signal: trendSignal,
+    trend_label: getTrendLabel(trendSignal),
   };
 }
