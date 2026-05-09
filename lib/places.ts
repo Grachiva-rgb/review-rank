@@ -86,11 +86,17 @@ async function getCachedSearch(cacheKey: string): Promise<Place[] | null> {
   if (!isSupabaseConfigured()) return null;
   try {
     const cutoff = new Date(Date.now() - SEARCH_CACHE_TTL_MS).toISOString();
-    const rows = await sbSelect<{ results: Place[] }>(
+    // Race against a 1-second timeout so a slow/unreachable Supabase never blocks search
+    const fetchPromise = sbSelect<{ results: Place[] }>(
       'search_cache',
       `cache_key=eq.${encodeURIComponent(cacheKey)}&created_at=gte.${encodeURIComponent(cutoff)}&select=results&limit=1`
+    ).then((rows) => rows[0]?.results ?? null).catch(() => null);
+
+    const timeoutPromise = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 1000)
     );
-    return rows[0]?.results ?? null;
+
+    return await Promise.race([fetchPromise, timeoutPromise]);
   } catch {
     return null; // cache miss is non-fatal
   }
@@ -99,11 +105,13 @@ async function getCachedSearch(cacheKey: string): Promise<Place[] | null> {
 async function setCachedSearch(cacheKey: string, results: Place[]): Promise<void> {
   if (!isSupabaseConfigured()) return;
   try {
-    await sbUpsert('search_cache', {
+    const writePromise = sbUpsert('search_cache', {
       cache_key: cacheKey,
       results,
       created_at: new Date().toISOString(),
     });
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000));
+    await Promise.race([writePromise, timeout]);
   } catch {
     // Non-blocking — cache write failure must not affect the response
   }
