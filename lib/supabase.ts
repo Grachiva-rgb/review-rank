@@ -58,6 +58,22 @@ export async function sbSelect<T = unknown>(
   return (await res.json()) as T[];
 }
 
+export async function sbUpsert<T extends object>(
+  table: string,
+  row: T
+): Promise<void> {
+  if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL not set');
+  const res = await fetch(`${url}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase upsert ${table} failed: ${res.status} ${detail}`);
+  }
+}
+
 export async function sbUpdate<T extends object>(
   table: string,
   query: string,

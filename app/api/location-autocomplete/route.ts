@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
   url.searchParams.set('key', key);
 
   try {
-    const res = await fetch(url.toString());
+    // Cache autocomplete responses for 1 hour — suggestions for "New York" or "Austin"
+    // don't change, and this prevents repeated Google API calls for the same prefix.
+    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
     if (!res.ok) return NextResponse.json([]);
 
     const data = await res.json();

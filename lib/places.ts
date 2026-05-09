@@ -3,6 +3,7 @@ import { calculateSmartScore, MIN_DISPLAY_RATING, detectCategory } from './ranki
 import { calculateReviewRankScore, BusinessReview, computeTrendSignal, getTrendLabel } from './reviewRankScoring';
 import { getCachedTAData } from './tripadvisor';
 import { computeMultiSourceScore } from './multiSourceScoring';
+import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -65,6 +66,49 @@ interface SearchOptions {
   radiusMeters?: number;
 }
 
+// ─── Search result cache (Supabase) ──────────────────────────────────────────
+
+const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Build a stable cache key from the search query and optional location bias.
+ * Lat/lng are rounded to 3 decimal places (~110 m precision) so nearby
+ * searches with fractionally different coords hit the same cache entry.
+ */
+function buildSearchCacheKey(query: string, options?: SearchOptions): string {
+  const q = query.trim().toLowerCase();
+  const lat = options?.lat != null ? Math.round(options.lat * 1000) / 1000 : '';
+  const lng = options?.lng != null ? Math.round(options.lng * 1000) / 1000 : '';
+  return `search:${q}:${lat}:${lng}`;
+}
+
+async function getCachedSearch(cacheKey: string): Promise<Place[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const cutoff = new Date(Date.now() - SEARCH_CACHE_TTL_MS).toISOString();
+    const rows = await sbSelect<{ results: Place[] }>(
+      'search_cache',
+      `cache_key=eq.${encodeURIComponent(cacheKey)}&created_at=gte.${encodeURIComponent(cutoff)}&select=results&limit=1`
+    );
+    return rows[0]?.results ?? null;
+  } catch {
+    return null; // cache miss is non-fatal
+  }
+}
+
+async function setCachedSearch(cacheKey: string, results: Place[]): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    await sbUpsert('search_cache', {
+      cache_key: cacheKey,
+      results,
+      created_at: new Date().toISOString(),
+    });
+  } catch {
+    // Non-blocking — cache write failure must not affect the response
+  }
+}
+
 export async function searchPlaces(query: string, options?: SearchOptions): Promise<Place[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -72,6 +116,15 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
   }
 
+  // Check Supabase cache before calling Google — saves a Pro-tier API call for
+  // any query repeated within the 30-minute TTL window.
+  const cacheKey = buildSearchCacheKey(query, options);
+  const cached = await getCachedSearch(cacheKey);
+  if (cached) return cached;
+
+  // NOTE: reviews intentionally excluded here — requesting reviews elevates the call
+  // to the Pro billing tier (5–10x cost). Reviews are only fetched in getPlaceDetails
+  // where they are actually needed for the scoring breakdown on the detail page.
   const fieldMask = [
     'places.id',
     'places.displayName',
@@ -83,7 +136,6 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     'places.currentOpeningHours',
     'places.priceLevel',
     'places.googleMapsUri',
-    'places.reviews',
   ].join(',');
 
   const body: Record<string, unknown> = { textQuery: query };
@@ -105,7 +157,7 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       'X-Goog-FieldMask': fieldMask,
     },
     body: JSON.stringify(body),
-    next: { revalidate: 300 },
+    next: { revalidate: 3600 }, // 1 hour — search results don't change meaningfully faster
   });
 
   if (!response.ok) {
@@ -118,7 +170,7 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
 
   const data = await response.json() as { places?: Record<string, unknown>[] };
 
-  return (data.places || []).filter((p) => {
+  const result = (data.places || []).filter((p) => {
     const r = (p.rating as number) || 0;
     return r >= MIN_DISPLAY_RATING;
   }).map((p) => {
@@ -167,6 +219,11 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       trend_label: getTrendLabel(trendSignal),
     };
   });
+
+  // Store in Supabase cache (non-blocking — never delays the response)
+  setCachedSearch(cacheKey, result).catch(() => {});
+
+  return result;
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {

@@ -17,6 +17,11 @@ import {
   getBusinessInsights,
 } from '@/lib/ranking';
 
+// Revalidate every hour — business details (ratings, reviews) don't change meaningfully faster.
+// This ensures most page loads are served from CDN cache rather than triggering a fresh
+// Place Details API call on every request.
+export const revalidate = 3600;
+
 interface BusinessPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ cat?: string }>;
