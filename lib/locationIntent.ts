@@ -324,9 +324,13 @@ export interface ZipSearchOutcome<T> {
  * Matches the segment immediately before ", STATE ZIP" or ", STATE, USA".
  */
 export function extractCityFromAddress(address: string): string | null {
-  // ", City, ST 12345" or ", City, ST, USA"
-  const m = address.match(/,\s+([^,]+),\s+[A-Z]{2}(?:\s+\d{5})?,?\s+USA/);
-  return m ? m[1].trim() : null;
+  // Primary: ", City, ST 12345[, USA]"  — works with or without trailing USA
+  const m1 = address.match(/,\s+([^,]+),\s+[A-Z]{2}\s+\d{5}/);
+  if (m1) return m1[1].trim();
+  // Fallback: ", City, ST, USA" (no ZIP)
+  const m2 = address.match(/,\s+([^,]+),\s+[A-Z]{2},?\s+USA/);
+  if (m2) return m2[1].trim();
+  return null;
 }
 
 /**
@@ -341,57 +345,62 @@ export function applyCityFilter<T extends PlaceShape>(
   categoryLabel: string,
   radiusMiles = 5
 ): ZipSearchOutcome<T> {
-  if (!center) {
-    return { places, locationMessage: null, expandedToNearby: false };
-  }
-
   const targetCity = cityState.city.toLowerCase();
+  const displayCity = `${cityState.city}, ${cityState.state}`;
 
+  // ── Step 1: city name matching (works with or without geocoding) ──────────
   const exactCity: T[] = [];
-  const nearby: T[] = [];
+  const notExactCity: T[] = [];
 
   for (const place of places) {
     const placeCity = extractCityFromAddress(place.formatted_address);
     if (placeCity && placeCity.toLowerCase() === targetCity) {
       exactCity.push(place);
-      continue;
+    } else {
+      notExactCity.push(place);
     }
-    // Fall back to distance from city centroid
-    const { lat, lng } = place.geometry.location;
-    const dist = calculateDistanceMiles(center.lat, center.lng, lat, lng);
-    if (dist <= radiusMiles) {
-      nearby.push(place);
-    }
-    // else excluded — outside radius and wrong city
   }
 
+  // ── Step 2: distance fallback for non-exact-city results (requires geocoding) ─
+  const nearby: T[] = [];
+  if (center) {
+    for (const place of notExactCity) {
+      const { lat, lng } = place.geometry.location;
+      const dist = calculateDistanceMiles(center.lat, center.lng, lat, lng);
+      if (dist <= radiusMiles) nearby.push(place);
+    }
+  }
+
+  // ── Step 3: decide what to return ─────────────────────────────────────────
   if (exactCity.length >= MIN_EXACT_RESULTS) {
     return {
       places: exactCity,
-      locationMessage: `Showing ${categoryLabel} in ${cityState.city}, ${cityState.state}`,
+      locationMessage: `Showing ${categoryLabel} in ${displayCity}`,
       expandedToNearby: false,
     };
   }
 
   const combined = [...exactCity, ...nearby];
+
   if (combined.length === 0) {
-    // Nothing found at all — return all state-filtered results with a note
+    // City name matching AND distance fallback both found nothing —
+    // return all state-filtered results as a last resort
     return {
       places,
-      locationMessage: `Showing ${categoryLabel} near ${cityState.city}, ${cityState.state}`,
+      locationMessage: `Results outside your search area — not enough found directly in ${displayCity}`,
       expandedToNearby: true,
     };
   }
 
   const msg =
     exactCity.length === 0
-      ? `No results found directly in ${cityState.city} — showing nearby results within ${radiusMiles} miles.`
-      : `Showing ${categoryLabel} in and near ${cityState.city}, ${cityState.state}`;
+      ? `Not enough results in ${displayCity} — showing nearby results within ${radiusMiles} miles.`
+      : `Showing ${categoryLabel} in and near ${displayCity}`;
 
   return {
     places: combined,
     locationMessage: msg,
-    expandedToNearby: exactCity.length < MIN_EXACT_RESULTS,
+    expandedToNearby: true,
   };
 }
 
