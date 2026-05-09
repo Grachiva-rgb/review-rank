@@ -17,6 +17,8 @@ interface ResultsClientProps {
   category: string;
   error: string | null;
   isGps?: boolean;
+  /** Optional message shown when ZIP-radius filtering was applied */
+  locationMessage?: string | null;
 }
 
 export default function ResultsClient({
@@ -26,6 +28,7 @@ export default function ResultsClient({
   category,
   error,
   isGps = false,
+  locationMessage = null,
 }: ResultsClientProps) {
   const [filter, setFilter] = useState<SortFilter>('smart_score');
 
@@ -182,6 +185,18 @@ export default function ResultsClient({
                   count={sortedPlaces.length}
                 />
               </div>
+
+              {/* Location context banner — shown when ZIP filtering was applied */}
+              {locationMessage && (
+                <div className="mb-5 rounded-xl border border-[#D9CEC8] bg-[#FAF7F0] px-4 py-3 flex items-center gap-2">
+                  <svg className="h-4 w-4 flex-shrink-0 text-[#8B5E3C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <p className="text-xs text-[#5A4A3F]">{locationMessage}</p>
+                </div>
+              )}
 
               {/* Rising Stars callout */}
               {risingStars.length > 0 && filter !== 'rising_stars' && (

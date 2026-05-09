@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { searchPlaces } from '@/lib/places';
 import { normalizeSearchQuery, filterByIntent } from '@/lib/searchIntent';
+import { parseZipFromQuery, geocodeZip, applyZipFilter } from '@/lib/locationIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
 
@@ -59,6 +60,27 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   // e.g. "gym" → "fitness gym" before building the Google Places query
   const normalizedCategory = query.trim() ? category.trim() : normalizeSearchQuery(category.trim());
 
+  // Detect ZIP code in query or location field ("hotels in 77089", "77089")
+  const targetZip =
+    parseZipFromQuery(query.trim()) ||
+    parseZipFromQuery(normalizedCategory) ||
+    parseZipFromQuery(location.trim()) ||
+    null;
+
+  // Resolve ZIP to lat/lng centroid (cached 24 h; null on any failure)
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? '';
+  const zipCenter = targetZip && !isGps
+    ? await geocodeZip(targetZip, apiKey).catch(() => null)
+    : null;
+
+  // When a ZIP is detected, bias the Google Places query around its centroid
+  // using a tighter radius (8 km ≈ 5 miles) for more geographically precise results
+  const locationBias = isGps
+    ? { lat: validLat!, lng: validLng! }
+    : zipCenter
+      ? { lat: zipCenter.lat, lng: zipCenter.lng, radiusMeters: 8000 }
+      : undefined;
+
   // Build the text query — q takes precedence; if absent, combine category + location
   const rawQuery =
     query.trim() ||
@@ -82,15 +104,20 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
 
   let places: Awaited<ReturnType<typeof searchPlaces>> = [];
   let error: string | null = null;
+  let locationMessage: string | null = null;
 
   try {
-    const raw = await searchPlaces(
-      searchQuery,
-      isGps ? { lat: validLat, lng: validLng } : undefined
-    );
+    const raw = await searchPlaces(searchQuery, locationBias);
+
     // Remove results that don't match the user's intent (e.g. gymnastics for "gym")
-    // and bubble strong matches to the top, using the original category as the intent key
-    places = filterByIntent(raw, category.trim() || query.trim());
+    const intentFiltered = filterByIntent(raw, category.trim() || query.trim());
+
+    // Apply ZIP radius filter when a ZIP was detected — hard eligibility, not just a boost
+    const categoryLabel = (category.trim() || query.trim() || 'results').toLowerCase();
+    const zipOutcome = applyZipFilter(intentFiltered, targetZip ?? '', zipCenter, categoryLabel);
+
+    places = zipOutcome.places;
+    locationMessage = zipOutcome.locationMessage;
   } catch (err) {
     // Log details server-side; show only a generic message to the client
     console.error('[ResultsPage] searchPlaces error:', err);
@@ -105,6 +132,7 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
       category={category}
       error={error}
       isGps={isGps}
+      locationMessage={locationMessage}
     />
   );
 }

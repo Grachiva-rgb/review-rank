@@ -1,0 +1,213 @@
+/**
+ * Location Intent Module
+ *
+ * Adds ZIP-code-aware location filtering to search:
+ *  1. Parses ZIP codes from freeform queries ("hotels in 77089")
+ *  2. Resolves ZIP to lat/lng centroid via Google Geocoding API
+ *  3. Filters results by exact ZIP match or distance radius
+ *  4. Produces UI messaging for the location context banner
+ *
+ * Location relevance is treated as a hard eligibility filter:
+ * results outside the radius are excluded regardless of Review Rank Score.
+ */
+
+/** US 5-digit ZIP code pattern */
+const ZIP_RE = /\b(\d{5})\b/;
+
+/**
+ * Extract the first 5-digit US ZIP code from a query string.
+ * "hotels in 77089"    → "77089"
+ * "best gym near me"   → null
+ */
+export function parseZipFromQuery(query: string): string | null {
+  const m = query.match(ZIP_RE);
+  return m ? m[1] : null;
+}
+
+/**
+ * Extract the ZIP code embedded in a Google Places `formattedAddress` string.
+ * "4501 N Shepherd Dr, Houston, TX 77018, USA" → "77018"
+ */
+export function extractZipFromAddress(address: string): string | null {
+  const m = address.match(ZIP_RE);
+  return m ? m[1] : null;
+}
+
+/**
+ * Haversine great-circle distance in statute miles.
+ */
+export function calculateDistanceMiles(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Resolved centroid for a ZIP code */
+export interface ZipCenter {
+  lat: number;
+  lng: number;
+  /** Canonical display form returned by the geocoder, e.g. "Houston, TX 77089" */
+  display: string;
+}
+
+/**
+ * Resolve a ZIP code to a geographic centroid using the Google Geocoding API.
+ * Results are cached for 24 hours (Vercel CDN / Next.js fetch cache).
+ * Returns null on any failure — the caller should degrade gracefully.
+ */
+export async function geocodeZip(
+  zip: string,
+  apiKey: string
+): Promise<ZipCenter | null> {
+  try {
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json` +
+      `?address=${encodeURIComponent(zip)}&components=country:US&key=${encodeURIComponent(apiKey)}`;
+
+    const res = await fetch(url, {
+      next: { revalidate: 86400 }, // cache 24 h
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      status: string;
+      results: Array<{
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+      }>;
+    };
+
+    if (data.status !== 'OK' || !data.results[0]) return null;
+
+    const { geometry, formatted_address } = data.results[0];
+    return {
+      lat: geometry.location.lat,
+      lng: geometry.location.lng,
+      display: formatted_address,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Shape returned by filterByZipOrRadius */
+export interface ZipFilterResult<T> {
+  /** Businesses whose formattedAddress contains exactly targetZip */
+  exactZip: T[];
+  /** Businesses within radiusMiles of the ZIP centroid but not in exactZip */
+  nearby: T[];
+  /** Businesses excluded because they are outside the radius */
+  excluded: T[];
+}
+
+type PlaceShape = {
+  formatted_address: string;
+  geometry: { location: { lat: number; lng: number } };
+};
+
+/**
+ * Partition a places array into exact-ZIP, nearby, and excluded buckets.
+ *
+ * @param places      - array of Place objects (must have formatted_address + geometry)
+ * @param targetZip   - the ZIP code the user searched for
+ * @param center      - lat/lng centroid of targetZip (from geocodeZip)
+ * @param radiusMiles - fallback radius when exact-ZIP results are scarce (default 5 mi)
+ */
+export function filterByZipOrRadius<T extends PlaceShape>(
+  places: T[],
+  targetZip: string,
+  center: ZipCenter,
+  radiusMiles = 5
+): ZipFilterResult<T> {
+  const exactZip: T[] = [];
+  const nearby: T[] = [];
+  const excluded: T[] = [];
+
+  for (const place of places) {
+    const placeZip = extractZipFromAddress(place.formatted_address);
+    if (placeZip === targetZip) {
+      exactZip.push(place);
+      continue;
+    }
+
+    const { lat, lng } = place.geometry.location;
+    const dist = calculateDistanceMiles(center.lat, center.lng, lat, lng);
+    if (dist <= radiusMiles) {
+      nearby.push(place);
+    } else {
+      excluded.push(place);
+    }
+  }
+
+  return { exactZip, nearby, excluded };
+}
+
+/** Minimum exact-ZIP results required before we expand to nearby radius */
+const MIN_EXACT_RESULTS = 3;
+
+export interface ZipSearchOutcome<T> {
+  /** Final ordered result list to render */
+  places: T[];
+  /**
+   * Human-readable message for the UI banner, or null if no ZIP filtering applied.
+   * Examples:
+   *   "Showing hotels in 77089"
+   *   "Not enough results in 77089 — showing nearby results within 5 miles."
+   */
+  locationMessage: string | null;
+  /** Whether any nearby-radius expansion was needed */
+  expandedToNearby: boolean;
+}
+
+/**
+ * High-level orchestrator: given a pre-filtered places array, apply ZIP logic
+ * and return the final result list plus a UI message.
+ *
+ * Returns { places, locationMessage: null } unchanged when center is null
+ * (i.e. geocoding failed or no ZIP was detected).
+ */
+export function applyZipFilter<T extends PlaceShape>(
+  places: T[],
+  targetZip: string,
+  center: ZipCenter | null,
+  categoryLabel: string,
+  radiusMiles = 5
+): ZipSearchOutcome<T> {
+  if (!center) {
+    return { places, locationMessage: null, expandedToNearby: false };
+  }
+
+  const { exactZip, nearby } = filterByZipOrRadius(places, targetZip, center, radiusMiles);
+
+  if (exactZip.length >= MIN_EXACT_RESULTS) {
+    return {
+      places: exactZip,
+      locationMessage: `Showing ${categoryLabel} in ${targetZip}`,
+      expandedToNearby: false,
+    };
+  }
+
+  // Not enough exact matches — expand to nearby
+  const combined = [...exactZip, ...nearby];
+  const msg =
+    exactZip.length === 0
+      ? `No results found directly in ${targetZip} — showing nearby results within ${radiusMiles} miles.`
+      : `Not enough results in ${targetZip} — showing nearby results within ${radiusMiles} miles.`;
+
+  return {
+    places: combined,
+    locationMessage: msg,
+    expandedToNearby: true,
+  };
+}
