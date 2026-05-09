@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { searchPlaces } from '@/lib/places';
+import { normalizeSearchQuery, filterByIntent } from '@/lib/searchIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
 
@@ -54,12 +55,16 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   const validLng = rawLng != null && !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : undefined;
   const isGps = validLat != null && validLng != null;
 
+  // Apply intent normalisation when using category search (not freeform q=)
+  // e.g. "gym" → "fitness gym" before building the Google Places query
+  const normalizedCategory = query.trim() ? category.trim() : normalizeSearchQuery(category.trim());
+
   // Build the text query — q takes precedence; if absent, combine category + location
   const rawQuery =
     query.trim() ||
-    (category.trim() && location.trim()
-      ? `${category.trim()} in ${location.trim()}`
-      : category.trim());
+    (normalizedCategory && location.trim()
+      ? `${normalizedCategory} in ${location.trim()}`
+      : normalizedCategory);
   const searchQuery = rawQuery.slice(0, MAX_QUERY_LENGTH);
 
   if (!searchQuery) {
@@ -79,10 +84,13 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   let error: string | null = null;
 
   try {
-    places = await searchPlaces(
+    const raw = await searchPlaces(
       searchQuery,
       isGps ? { lat: validLat, lng: validLng } : undefined
     );
+    // Remove results that don't match the user's intent (e.g. gymnastics for "gym")
+    // and bubble strong matches to the top, using the original category as the intent key
+    places = filterByIntent(raw, category.trim() || query.trim());
   } catch (err) {
     // Log details server-side; show only a generic message to the client
     console.error('[ResultsPage] searchPlaces error:', err);
