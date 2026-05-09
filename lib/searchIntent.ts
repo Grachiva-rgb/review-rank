@@ -184,6 +184,426 @@ export const SEARCH_INTENT_MAP: Record<string, SearchIntentConfig> = {
     excludePatterns: [/veterinarian/i, /vet\s*(clinic|hospital)/i, /animal\s*hospital/i],
     includePatterns: [/family\s*medicine/i, /internal\s*medicine/i, /primary\s*care/i],
   },
+
+  // ─── Auto & Home Services ──────────────────────────────────────────────────
+
+  mechanic: {
+    canonicalQuery: 'auto repair mechanic',
+    excludePatterns: [
+      /mechanical\s*engineer/i,
+      /auto\s*parts\s*(store|shop)/i,
+      /body\s*shop/i,
+      /tow(ing)?\s*(company|service|truck)/i,
+    ],
+    includePatterns: [
+      /auto\s*(repair|service|mechanic)/i,
+      /car\s*(repair|service|mechanic)/i,
+      /oil\s*change/i,
+      /transmission/i,
+      /brake/i,
+    ],
+  },
+
+  plumber: {
+    canonicalQuery: 'plumber plumbing service',
+    excludePatterns: [/plumbing\s*(supply|wholesale|parts|distributor)/i, /plumbing\s*school/i],
+    includePatterns: [/plumb(er|ing)/i, /pipe\s*repair/i, /drain\s*(cleaning|service)/i],
+  },
+
+  electrician: {
+    canonicalQuery: 'electrician electrical service',
+    excludePatterns: [
+      /electrical\s*(supply|wholesale|parts|school|contractor\s*school)/i,
+      /solar\s*(panel|company|install)/i,
+    ],
+    includePatterns: [/electrician/i, /electrical\s*(repair|service|contractor)/i, /wiring/i],
+  },
+
+  hvac: {
+    canonicalQuery: 'HVAC air conditioning heating service',
+    excludePatterns: [/hvac\s*(school|training|parts|supply)/i],
+    includePatterns: [
+      /hvac/i,
+      /air\s*conditioning/i,
+      /furnace/i,
+      /heating\s*(and|&)?\s*cooling/i,
+      /heat\s*pump/i,
+    ],
+  },
+
+  landscaping: {
+    canonicalQuery: 'landscaping lawn care service',
+    excludePatterns: [
+      /landscaping\s*(school|supply|materials)/i,
+      /nursery\s*(only|plant\s*store)/i,
+    ],
+    includePatterns: [
+      /landscap/i,
+      /lawn\s*(care|service|mowing|maintenance)/i,
+      /yard\s*(care|service)/i,
+      /tree\s*(service|trimm|removal)/i,
+    ],
+  },
+
+  cleaner: {
+    canonicalQuery: 'house cleaning service',
+    excludePatterns: [
+      /car\s*(wash|detail)/i,
+      /dry\s*clean(ing|er)?/i,
+      /carpet\s*cleaning\s*(supply|equipment)/i,
+    ],
+    includePatterns: [
+      /house\s*clean/i,
+      /home\s*clean/i,
+      /maid\s*service/i,
+      /janitorial/i,
+      /commercial\s*clean/i,
+    ],
+  },
+
+  'dry cleaner': {
+    canonicalQuery: 'dry cleaning laundry service',
+    excludePatterns: [/laundromat/i],
+    includePatterns: [/dry\s*clean/i, /laundry\s*service/i, /alteration/i, /tailoring/i],
+  },
+
+  pest: {
+    canonicalQuery: 'pest control exterminator',
+    excludePatterns: [/pest\s*(supply|product|store)/i],
+    includePatterns: [/pest\s*control/i, /exterminator/i, /termite/i, /rodent\s*control/i],
+  },
+
+  mover: {
+    canonicalQuery: 'moving company movers',
+    excludePatterns: [/truck\s*rental/i, /storage\s*(only|facility\s*only)/i],
+    includePatterns: [/moving\s*company/i, /movers/i, /relocation\s*service/i],
+  },
+
+  locksmith: {
+    canonicalQuery: 'locksmith key service',
+    excludePatterns: [/lock\s*(supply|store|wholesale)/i],
+    includePatterns: [/locksmith/i, /key\s*(cutting|duplication|copy)/i],
+  },
+
+  roofer: {
+    canonicalQuery: 'roofing contractor',
+    excludePatterns: [/roofing\s*(supply|material|wholesale)/i],
+    includePatterns: [/roofer/i, /roofing\s*(contractor|company|service)/i, /roof\s*repair/i],
+  },
+
+  // ─── Health & Medical ──────────────────────────────────────────────────────
+
+  dentist: {
+    canonicalQuery: 'dentist dental office',
+    excludePatterns: [
+      /dental\s*(school|college|lab|supply|equipment)/i,
+      /denture\s*(lab|center)/i,
+    ],
+    includePatterns: [
+      /dentist/i,
+      /dental\s*(office|practice|clinic)/i,
+      /orthodont/i,
+      /pediatric\s*dent/i,
+    ],
+  },
+
+  chiropractor: {
+    canonicalQuery: 'chiropractor chiropractic clinic',
+    excludePatterns: [/chiropractic\s*(school|college|supply)/i],
+    includePatterns: [/chiropractor/i, /chiropractic/i, /spinal\s*(care|adjust)/i],
+  },
+
+  'physical therapy': {
+    canonicalQuery: 'physical therapy clinic',
+    excludePatterns: [/physical\s*therapy\s*(school|college|supply)/i],
+    includePatterns: [
+      /physical\s*ther/i,
+      /physiotherapy/i,
+      /sports\s*(rehab|medicine\s*physical)/i,
+      /occupational\s*ther/i,
+    ],
+  },
+
+  optometrist: {
+    canonicalQuery: 'eye doctor optometrist',
+    excludePatterns: [/optometry\s*(school|college)/i, /vision\s*(insurance|plan)/i],
+    includePatterns: [
+      /optometrist/i,
+      /eye\s*(doctor|care|clinic|center)/i,
+      /vision\s*(center|care)/i,
+      /ophthalmol/i,
+    ],
+  },
+
+  'eye doctor': {
+    canonicalQuery: 'eye doctor optometrist',
+    excludePatterns: [/optometry\s*(school|college)/i],
+    includePatterns: [/optometrist/i, /eye\s*(doctor|care|clinic)/i, /vision\s*(center|care)/i],
+  },
+
+  vet: {
+    canonicalQuery: 'veterinarian animal hospital',
+    excludePatterns: [
+      /veteran(s)?\s*(affairs|hospital|service|memorial|administration)/i,
+      /va\s*(hospital|clinic|center)/i,
+    ],
+    includePatterns: [
+      /veterinarian/i,
+      /vet(erinary)?\s*(clinic|hospital|care|center)/i,
+      /animal\s*(hospital|clinic|care)/i,
+    ],
+  },
+
+  pharmacy: {
+    canonicalQuery: 'pharmacy drug store',
+    excludePatterns: [/pharmacy\s*(school|college|wholesale)/i, /pharmaceutical\s*company/i],
+    includePatterns: [/pharmacy/i, /drug\s*store/i, /compounding/i, /rx/i],
+  },
+
+  therapist: {
+    canonicalQuery: 'mental health therapist counselor',
+    excludePatterns: [
+      /massage\s*therapist/i,
+      /physical\s*therapist/i,
+      /occupational\s*therapist/i,
+    ],
+    includePatterns: [
+      /mental\s*health/i,
+      /therapist/i,
+      /counselor/i,
+      /psychologist/i,
+      /psychiatrist/i,
+      /counseling/i,
+    ],
+  },
+
+  // ─── Food & Drink ──────────────────────────────────────────────────────────
+
+  restaurant: {
+    canonicalQuery: 'restaurant',
+    excludePatterns: [
+      /restaurant\s*(supply|equipment|furniture)/i,
+      /food\s*(distributor|wholesaler|supplier)/i,
+    ],
+    includePatterns: [/restaurant/i, /diner/i, /bistro/i, /eatery/i, /grill/i, /kitchen/i],
+  },
+
+  pizza: {
+    canonicalQuery: 'pizza restaurant',
+    excludePatterns: [
+      /pizza\s*(supply|dough|ingredient|wholesale)/i,
+      /pizza\s*box/i,
+    ],
+    includePatterns: [/pizza/i, /pizzeria/i, /pie/i],
+  },
+
+  coffee: {
+    canonicalQuery: 'coffee shop cafe',
+    excludePatterns: [
+      /coffee\s*(roaster\s*wholesale|bean\s*supplier|distributor)/i,
+      /coffee\s*machine\s*(repair|service|sales)/i,
+    ],
+    includePatterns: [
+      /coffee\s*(shop|house|bar|cafe)/i,
+      /caf[eé]/i,
+      /espresso/i,
+      /latte/i,
+      /roastery/i,
+    ],
+  },
+
+  cafe: {
+    canonicalQuery: 'coffee shop cafe',
+    excludePatterns: [/internet\s*cafe/i, /cyber\s*cafe/i, /gaming\s*cafe/i],
+    includePatterns: [/caf[eé]/i, /coffee/i, /bakery\s*cafe/i, /bistro/i],
+  },
+
+  bakery: {
+    canonicalQuery: 'bakery bread shop',
+    excludePatterns: [/bakery\s*(supply|equipment|wholesale)/i],
+    includePatterns: [/bakery/i, /bak(er|ery)/i, /pastry/i, /bread/i, /cake\s*shop/i],
+  },
+
+  sushi: {
+    canonicalQuery: 'sushi restaurant',
+    excludePatterns: [/sushi\s*(grade|supply|fish\s*market)/i],
+    includePatterns: [/sushi/i, /japanese\s*restaurant/i, /hibachi/i, /ramen/i],
+  },
+
+  // ─── Beauty & Personal Care ────────────────────────────────────────────────
+
+  barber: {
+    canonicalQuery: 'barber shop haircut',
+    excludePatterns: [/barbecue/i, /bbq/i, /barber\s*(school|college|supply)/i],
+    includePatterns: [/barber(shop)?/i, /haircut/i, /men.s\s*(hair|grooming|cut)/i],
+  },
+
+  hair: {
+    canonicalQuery: 'hair salon',
+    excludePatterns: [
+      /hair\s*(loss\s*treatment\s*supply|extension\s*wholesale|product\s*supplier)/i,
+      /wig\s*(store|shop|boutique)/i,
+    ],
+    includePatterns: [
+      /hair\s*(salon|studio|color|stylist|cut)/i,
+      /salon/i,
+      /blowout/i,
+      /balayage/i,
+    ],
+  },
+
+  salon: {
+    canonicalQuery: 'hair salon beauty salon',
+    excludePatterns: [
+      /salon\s*(supply|wholesale|equipment)/i,
+      /beauty\s*school/i,
+      /cosmetology\s*school/i,
+    ],
+    includePatterns: [
+      /hair\s*salon/i,
+      /beauty\s*salon/i,
+      /full\s*service\s*salon/i,
+      /nail\s*salon/i,
+    ],
+  },
+
+  waxing: {
+    canonicalQuery: 'waxing salon hair removal',
+    excludePatterns: [/car\s*wax/i, /floor\s*wax/i, /candle\s*wax/i],
+    includePatterns: [/wax(ing)?/i, /hair\s*removal/i, /sugaring/i, /threading/i],
+  },
+
+  // ─── Finance & Professional ────────────────────────────────────────────────
+
+  accountant: {
+    canonicalQuery: 'accountant CPA accounting firm',
+    excludePatterns: [
+      /accounting\s*(software|school|college|program)/i,
+      /quickbooks\s*(training|consultant)/i,
+    ],
+    includePatterns: [
+      /accountant/i,
+      /cpa/i,
+      /accounting\s*(firm|office|service)/i,
+      /tax\s*(prep|service|professional)/i,
+      /bookkeeping/i,
+    ],
+  },
+
+  tax: {
+    canonicalQuery: 'tax preparation service',
+    excludePatterns: [
+      /tax\s*(attorney\s*only|law\s*school)/i,
+      /tax\s*software/i,
+    ],
+    includePatterns: [
+      /tax\s*(prep|preparation|service|professional)/i,
+      /cpa/i,
+      /accountant/i,
+      /h\s*&\s*r\s*block/i,
+    ],
+  },
+
+  realtor: {
+    canonicalQuery: 'realtor real estate agent',
+    excludePatterns: [
+      /real\s*estate\s*(school|college|law|investing\s*course)/i,
+      /property\s*management\s*(company\s*only)/i,
+    ],
+    includePatterns: [
+      /realtor/i,
+      /real\s*estate\s*(agent|broker|company|group)/i,
+      /realty/i,
+      /keller\s*williams/i,
+      /re\s*\/\s*max/i,
+    ],
+  },
+
+  insurance: {
+    canonicalQuery: 'insurance agent',
+    excludePatterns: [
+      /insurance\s*(school|training|software|wholesale)/i,
+    ],
+    includePatterns: [
+      /insurance\s*(agent|agency|broker|company)/i,
+      /allstate/i,
+      /state\s*farm/i,
+      /farmers\s*insurance/i,
+    ],
+  },
+
+  // ─── Pets ──────────────────────────────────────────────────────────────────
+
+  groomer: {
+    canonicalQuery: 'pet grooming dog groomer',
+    excludePatterns: [
+      /wedding\s*groo/i,
+      /groom(ing)?\s*(suit|attire|tuxedo)/i,
+      /bridal/i,
+    ],
+    includePatterns: [
+      /pet\s*groo/i,
+      /dog\s*groo/i,
+      /cat\s*groo/i,
+      /mobile\s*groo/i,
+    ],
+  },
+
+  'dog groomer': {
+    canonicalQuery: 'dog grooming pet salon',
+    excludePatterns: [],
+    includePatterns: [/dog\s*groo/i, /pet\s*(salon|spa|groo)/i],
+  },
+
+  // ─── Education & Childcare ─────────────────────────────────────────────────
+
+  daycare: {
+    canonicalQuery: 'daycare child care center',
+    excludePatterns: [/daycare\s*(software|management|supply)/i],
+    includePatterns: [
+      /daycare/i,
+      /child\s*care/i,
+      /preschool/i,
+      /early\s*(learning|childhood|education)/i,
+    ],
+  },
+
+  tutor: {
+    canonicalQuery: 'tutoring academic tutor',
+    excludePatterns: [/tutor(ing)?\s*(software|app|platform)/i],
+    includePatterns: [
+      /tutor/i,
+      /tutoring\s*(center|service)/i,
+      /learning\s*center/i,
+      /academic\s*(coach|support)/i,
+    ],
+  },
+
+  // ─── Hospitality & Travel ──────────────────────────────────────────────────
+
+  hotel: {
+    canonicalQuery: 'hotel',
+    excludePatterns: [
+      /hotel\s*(management\s*school|supply|furniture|software)/i,
+      /hospitality\s*school/i,
+    ],
+    includePatterns: [
+      /hotel/i,
+      /inn/i,
+      /resort/i,
+      /suites/i,
+      /lodge/i,
+      /marriott/i,
+      /hilton/i,
+      /hyatt/i,
+    ],
+  },
+
+  motel: {
+    canonicalQuery: 'motel',
+    excludePatterns: [],
+    includePatterns: [/motel/i, /motor\s*inn/i, /inn/i, /lodge/i],
+  },
 };
 
 // ─── Word strip list ─────────────────────────────────────────────────────────
