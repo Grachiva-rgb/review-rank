@@ -56,7 +56,10 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   // Auth: accepts ADMIN_SECRET (manual) or CRON_SECRET (Vercel scheduler)
   if (!isAuthorized(request)) {
-    return unauthorized();
+    return NextResponse.json({
+      error: 'Unauthorized',
+      debug: { adminSecretSet: !!process.env.ADMIN_SECRET, adminSecretLength: process.env.ADMIN_SECRET?.length ?? 0 },
+    }, { status: 401 });
   }
 
   if (!isSupabaseConfigured()) {
