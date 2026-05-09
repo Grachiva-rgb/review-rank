@@ -125,6 +125,7 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   let places: Awaited<ReturnType<typeof searchPlaces>> = [];
   let error: string | null = null;
   let locationMessage: string | null = null;
+  let locationExpanded = false;
 
   try {
     const raw = await searchPlaces(searchQuery, locationBias);
@@ -139,6 +140,7 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
       const zipOutcome = applyZipFilter(intentFiltered, targetZip, zipCenter, categoryLabel);
       places = zipOutcome.places;
       locationMessage = zipOutcome.locationMessage;
+      locationExpanded = zipOutcome.expandedToNearby;
     } else if (cityState) {
       // City+state path:
       //   1. Hard-filter by state (drops Hudson MA / Hudson NY)
@@ -147,6 +149,7 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
       const cityOutcome = applyCityFilter(stateFiltered, cityState, cityStateCenter, categoryLabel);
       places = cityOutcome.places;
       locationMessage = cityOutcome.locationMessage;
+      locationExpanded = cityOutcome.expandedToNearby;
     } else {
       places = intentFiltered;
     }
@@ -165,6 +168,7 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
       error={error}
       isGps={isGps}
       locationMessage={locationMessage}
+      locationExpanded={locationExpanded}
     />
   );
 }

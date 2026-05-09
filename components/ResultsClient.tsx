@@ -17,8 +17,10 @@ interface ResultsClientProps {
   category: string;
   error: string | null;
   isGps?: boolean;
-  /** Optional message shown when ZIP-radius filtering was applied */
+  /** Message shown when location filtering was applied */
   locationMessage?: string | null;
+  /** True when results were expanded outside the exact requested area */
+  locationExpanded?: boolean;
 }
 
 export default function ResultsClient({
@@ -29,6 +31,7 @@ export default function ResultsClient({
   error,
   isGps = false,
   locationMessage = null,
+  locationExpanded = false,
 }: ResultsClientProps) {
   const [filter, setFilter] = useState<SortFilter>('smart_score');
 
@@ -186,15 +189,29 @@ export default function ResultsClient({
                 />
               </div>
 
-              {/* Location context banner — shown when ZIP filtering was applied */}
-              {locationMessage && (
-                <div className="mb-5 rounded-xl border border-[#D9CEC8] bg-[#FAF7F0] px-4 py-3 flex items-center gap-2">
-                  <svg className="h-4 w-4 flex-shrink-0 text-[#8B5E3C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {/* Location context banner */}
+              {locationMessage && !locationExpanded && (
+                <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-2">
+                  <svg className="h-4 w-4 flex-shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <p className="text-xs text-[#5A4A3F]">{locationMessage}</p>
+                  <p className="text-sm text-emerald-800 font-medium">{locationMessage}</p>
+                </div>
+              )}
+
+              {/* Expanded area warning — shown when not enough results in the exact location */}
+              {locationMessage && locationExpanded && (
+                <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 flex items-start gap-3">
+                  <svg className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Results outside your search area</p>
+                    <p className="text-xs text-amber-700 mt-0.5">{locationMessage}</p>
+                  </div>
                 </div>
               )}
 
