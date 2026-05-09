@@ -55,9 +55,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
 export async function POST(request: Request): Promise<NextResponse> {
   // Auth: accepts ADMIN_SECRET (manual) or CRON_SECRET (Vercel scheduler)
-  // TEMP: allow one-time seed run — will be re-locked after seeding
-  const seedToken = request.headers.get('x-seed-token');
-  if (seedToken !== 'seed-ta-2026-once' && !isAuthorized(request)) {
+  if (!isAuthorized(request)) {
     return unauthorized();
   }
 
