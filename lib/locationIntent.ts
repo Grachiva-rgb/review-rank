@@ -14,6 +14,118 @@
 /** US 5-digit ZIP code pattern */
 const ZIP_RE = /\b(\d{5})\b/;
 
+/** Valid US state + DC abbreviations */
+const US_STATES = new Set([
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC',
+]);
+
+export interface CityState {
+  city: string;
+  state: string; // always uppercase, e.g. "OH"
+}
+
+/**
+ * Parse a city + US state abbreviation from a freeform query or location string.
+ * Case-insensitive — handles "Hudson OH", "Hudson Oh", "Hudson, OH".
+ *
+ * "accountant in Hudson OH"  → { city: "Hudson", state: "OH" }
+ * "dentist near Austin, TX"  → { city: "Austin", state: "TX" }
+ * "pizza Boston MA"          → { city: "Boston", state: "MA" }
+ */
+export function parseCityStateFromQuery(query: string): CityState | null {
+  // "in/near <city words> [,] <STATE>" — case-insensitive
+  const patterns = [
+    /\b(?:in|near)\s+([A-Za-z][A-Za-z\s]*?),?\s+([A-Za-z]{2})\b/i,
+    // bare "city STATE" at end of string
+    /([A-Za-z][A-Za-z\s]*?),?\s+([A-Za-z]{2})(?:\s+\d{5})?\s*$/i,
+  ];
+
+  for (const re of patterns) {
+    const m = query.match(re);
+    if (m) {
+      const stateCode = m[2].toUpperCase();
+      if (US_STATES.has(stateCode)) {
+        // Avoid false positives: city part must be at least 2 chars
+        const city = m[1].trim();
+        if (city.length >= 2) return { city, state: stateCode };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the US state abbreviation from a Google Places formattedAddress.
+ * "123 Main St, Hudson, OH 44236, USA" → "OH"
+ * "Hudson, OH, USA"                    → "OH"
+ */
+export function extractStateFromAddress(address: string): string | null {
+  // Primary: state code followed by ZIP
+  const m1 = address.match(/,\s+([A-Z]{2})\s+\d{5}/);
+  if (m1) return m1[1];
+  // Fallback: ", STATE, USA" or ", STATE USA"
+  const m2 = address.match(/,\s+([A-Z]{2}),?\s+USA/);
+  if (m2 && US_STATES.has(m2[1])) return m2[1];
+  return null;
+}
+
+/**
+ * Resolve a "City, STATE" pair to a geographic centroid via Google Geocoding.
+ * Cached 24 h. Returns null on any failure.
+ */
+export async function geocodeCityState(
+  city: string,
+  state: string,
+  apiKey: string
+): Promise<ZipCenter | null> {
+  try {
+    const address = `${city}, ${state}`;
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json` +
+      `?address=${encodeURIComponent(address)}` +
+      `&components=country:US|administrative_area:${state}` +
+      `&key=${encodeURIComponent(apiKey)}`;
+
+    const res = await fetch(url, { next: { revalidate: 86400 } });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      status: string;
+      results: Array<{
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+      }>;
+    };
+
+    if (data.status !== 'OK' || !data.results[0]) return null;
+
+    const { geometry, formatted_address } = data.results[0];
+    return {
+      lat: geometry.location.lat,
+      lng: geometry.location.lng,
+      display: formatted_address,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hard-filter a places array to only include results whose formattedAddress
+ * contains the given US state abbreviation.
+ * This prevents "Hudson OH" searches from returning Hudson MA / Hudson NY results.
+ */
+export function filterByState<T extends { formatted_address: string }>(
+  places: T[],
+  state: string
+): T[] {
+  return places.filter((p) => extractStateFromAddress(p.formatted_address) === state);
+}
+
 /**
  * Extract the first 5-digit US ZIP code from a query string.
  * "hotels in 77089"    → "77089"

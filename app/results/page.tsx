@@ -1,7 +1,14 @@
 import type { Metadata } from 'next';
 import { searchPlaces } from '@/lib/places';
 import { normalizeSearchQuery, filterByIntent } from '@/lib/searchIntent';
-import { parseZipFromQuery, geocodeZip, applyZipFilter } from '@/lib/locationIntent';
+import {
+  parseZipFromQuery,
+  geocodeZip,
+  applyZipFilter,
+  parseCityStateFromQuery,
+  geocodeCityState,
+  filterByState,
+} from '@/lib/locationIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
 
@@ -67,19 +74,31 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     parseZipFromQuery(location.trim()) ||
     null;
 
-  // Resolve ZIP to lat/lng centroid (cached 24 h; null on any failure)
+  // Detect city+state ("Hudson OH", "Austin, TX") — used when no ZIP is present
+  const cityState = !targetZip
+    ? parseCityStateFromQuery(query.trim()) ||
+      parseCityStateFromQuery(location.trim()) ||
+      parseCityStateFromQuery(normalizedCategory)
+    : null;
+
+  // Resolve ZIP or city+state to lat/lng centroid (cached 24 h; null on any failure)
   const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? '';
   const zipCenter = targetZip && !isGps
     ? await geocodeZip(targetZip, apiKey).catch(() => null)
     : null;
 
-  // When a ZIP is detected, bias the Google Places query around its centroid
-  // using a tighter radius (8 km ≈ 5 miles) for more geographically precise results
+  const cityStateCenter = cityState && !isGps && !zipCenter
+    ? await geocodeCityState(cityState.city, cityState.state, apiKey).catch(() => null)
+    : null;
+
+  // Location bias priority: GPS > ZIP centroid (tight 8 km) > city+state centroid (15 km)
   const locationBias = isGps
     ? { lat: validLat!, lng: validLng! }
     : zipCenter
       ? { lat: zipCenter.lat, lng: zipCenter.lng, radiusMeters: 8000 }
-      : undefined;
+      : cityStateCenter
+        ? { lat: cityStateCenter.lat, lng: cityStateCenter.lng, radiusMeters: 15000 }
+        : undefined;
 
   // Build the text query — q takes precedence; if absent, combine category + location
   const rawQuery =
@@ -112,12 +131,23 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     // Remove results that don't match the user's intent (e.g. gymnastics for "gym")
     const intentFiltered = filterByIntent(raw, category.trim() || query.trim());
 
+    // Hard-filter by state when a city+state was detected ("Hudson OH" → OH only)
+    // This prevents results from same-named cities in other states
+    const stateFiltered = cityState
+      ? filterByState(intentFiltered, cityState.state)
+      : intentFiltered;
+
     // Apply ZIP radius filter when a ZIP was detected — hard eligibility, not just a boost
     const categoryLabel = (category.trim() || query.trim() || 'results').toLowerCase();
-    const zipOutcome = applyZipFilter(intentFiltered, targetZip ?? '', zipCenter, categoryLabel);
+    const zipOutcome = applyZipFilter(stateFiltered, targetZip ?? '', zipCenter, categoryLabel);
 
     places = zipOutcome.places;
     locationMessage = zipOutcome.locationMessage;
+
+    // Show city+state banner when state filtering was applied and no ZIP message exists
+    if (!locationMessage && cityState && stateFiltered.length < intentFiltered.length) {
+      locationMessage = `Showing results in ${cityState.city}, ${cityState.state}`;
+    }
   } catch (err) {
     // Log details server-side; show only a generic message to the client
     console.error('[ResultsPage] searchPlaces error:', err);
