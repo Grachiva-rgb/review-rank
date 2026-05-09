@@ -23,38 +23,74 @@ const US_STATES = new Set([
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC',
 ]);
 
+/** Full state name → 2-letter code, lowercase keys */
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR',
+  'california':'CA','colorado':'CO','connecticut':'CT','delaware':'DE',
+  'florida':'FL','georgia':'GA','hawaii':'HI','idaho':'ID',
+  'illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+  'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS',
+  'missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV',
+  'new hampshire':'NH','new jersey':'NJ','new mexico':'NM','new york':'NY',
+  'north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+  'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT',
+  'vermont':'VT','virginia':'VA','washington':'WA','west virginia':'WV',
+  'wisconsin':'WI','wyoming':'WY','district of columbia':'DC',
+};
+
 export interface CityState {
   city: string;
   state: string; // always uppercase, e.g. "OH"
 }
 
 /**
- * Parse a city + US state abbreviation from a freeform query or location string.
- * Case-insensitive — handles "Hudson OH", "Hudson Oh", "Hudson, OH".
+ * Parse a city + US state from a freeform query or location string.
+ * Handles both 2-letter abbreviations and full state names, case-insensitive.
  *
- * "accountant in Hudson OH"  → { city: "Hudson", state: "OH" }
- * "dentist near Austin, TX"  → { city: "Austin", state: "TX" }
- * "pizza Boston MA"          → { city: "Boston", state: "MA" }
+ * "accountant in Hudson OH"    → { city: "Hudson", state: "OH" }
+ * "hotels in hudson ohio"      → { city: "hudson", state: "OH" }
+ * "dentist near Austin, TX"    → { city: "Austin", state: "TX" }
+ * "pizza Boston Massachusetts" → { city: "Boston", state: "MA" }
  */
 export function parseCityStateFromQuery(query: string): CityState | null {
-  // "in/near <city words> [,] <STATE>" — case-insensitive
-  const patterns = [
+  const q = query.trim();
+
+  // 1. Try full state names first (longest match wins — "new hampshire" before "new")
+  const stateNames = Object.keys(STATE_NAME_TO_CODE).sort((a, b) => b.length - a.length);
+  for (const name of stateNames) {
+    const escaped = name.replace(/\s+/g, '\\s+');
+    const re = new RegExp(
+      `\\b(?:in|near)\\s+([A-Za-z][A-Za-z\\s]*?),?\\s+${escaped}\\b|` +
+      `([A-Za-z][A-Za-z\\s]*?),?\\s+${escaped}(?:\\s+\\d{5})?\\s*$`,
+      'i'
+    );
+    const m = q.match(re);
+    if (m) {
+      const city = (m[1] || m[2] || '').trim();
+      if (city.length >= 2) {
+        return { city, state: STATE_NAME_TO_CODE[name] };
+      }
+    }
+  }
+
+  // 2. Fall back to 2-letter abbreviations
+  const abbrevPatterns = [
     /\b(?:in|near)\s+([A-Za-z][A-Za-z\s]*?),?\s+([A-Za-z]{2})\b/i,
-    // bare "city STATE" at end of string
     /([A-Za-z][A-Za-z\s]*?),?\s+([A-Za-z]{2})(?:\s+\d{5})?\s*$/i,
   ];
-
-  for (const re of patterns) {
-    const m = query.match(re);
+  for (const re of abbrevPatterns) {
+    const m = q.match(re);
     if (m) {
       const stateCode = m[2].toUpperCase();
       if (US_STATES.has(stateCode)) {
-        // Avoid false positives: city part must be at least 2 chars
         const city = m[1].trim();
         if (city.length >= 2) return { city, state: stateCode };
       }
     }
   }
+
   return null;
 }
 
@@ -280,6 +316,83 @@ export interface ZipSearchOutcome<T> {
   locationMessage: string | null;
   /** Whether any nearby-radius expansion was needed */
   expandedToNearby: boolean;
+}
+
+/**
+ * Extract the city name from a Google Places formattedAddress.
+ * "123 Main St, Hudson, OH 44236, USA" → "Hudson"
+ * Matches the segment immediately before ", STATE ZIP" or ", STATE, USA".
+ */
+export function extractCityFromAddress(address: string): string | null {
+  // ", City, ST 12345" or ", City, ST, USA"
+  const m = address.match(/,\s+([^,]+),\s+[A-Z]{2}(?:\s+\d{5})?,?\s+USA/);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * High-level orchestrator for city+state searches.
+ * Filters results to those matching the city name or within radiusMiles of the centroid.
+ * Mirrors the logic of applyZipFilter but scoped to a city rather than a ZIP.
+ */
+export function applyCityFilter<T extends PlaceShape>(
+  places: T[],
+  cityState: CityState,
+  center: ZipCenter | null,
+  categoryLabel: string,
+  radiusMiles = 5
+): ZipSearchOutcome<T> {
+  if (!center) {
+    return { places, locationMessage: null, expandedToNearby: false };
+  }
+
+  const targetCity = cityState.city.toLowerCase();
+
+  const exactCity: T[] = [];
+  const nearby: T[] = [];
+
+  for (const place of places) {
+    const placeCity = extractCityFromAddress(place.formatted_address);
+    if (placeCity && placeCity.toLowerCase() === targetCity) {
+      exactCity.push(place);
+      continue;
+    }
+    // Fall back to distance from city centroid
+    const { lat, lng } = place.geometry.location;
+    const dist = calculateDistanceMiles(center.lat, center.lng, lat, lng);
+    if (dist <= radiusMiles) {
+      nearby.push(place);
+    }
+    // else excluded — outside radius and wrong city
+  }
+
+  if (exactCity.length >= MIN_EXACT_RESULTS) {
+    return {
+      places: exactCity,
+      locationMessage: `Showing ${categoryLabel} in ${cityState.city}, ${cityState.state}`,
+      expandedToNearby: false,
+    };
+  }
+
+  const combined = [...exactCity, ...nearby];
+  if (combined.length === 0) {
+    // Nothing found at all — return all state-filtered results with a note
+    return {
+      places,
+      locationMessage: `Showing ${categoryLabel} near ${cityState.city}, ${cityState.state}`,
+      expandedToNearby: true,
+    };
+  }
+
+  const msg =
+    exactCity.length === 0
+      ? `No results found directly in ${cityState.city} — showing nearby results within ${radiusMiles} miles.`
+      : `Showing ${categoryLabel} in and near ${cityState.city}, ${cityState.state}`;
+
+  return {
+    places: combined,
+    locationMessage: msg,
+    expandedToNearby: exactCity.length < MIN_EXACT_RESULTS,
+  };
 }
 
 /**

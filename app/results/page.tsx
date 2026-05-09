@@ -8,6 +8,7 @@ import {
   parseCityStateFromQuery,
   geocodeCityState,
   filterByState,
+  applyCityFilter,
 } from '@/lib/locationIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
@@ -131,22 +132,23 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     // Remove results that don't match the user's intent (e.g. gymnastics for "gym")
     const intentFiltered = filterByIntent(raw, category.trim() || query.trim());
 
-    // Hard-filter by state when a city+state was detected ("Hudson OH" → OH only)
-    // This prevents results from same-named cities in other states
-    const stateFiltered = cityState
-      ? filterByState(intentFiltered, cityState.state)
-      : intentFiltered;
-
-    // Apply ZIP radius filter when a ZIP was detected — hard eligibility, not just a boost
     const categoryLabel = (category.trim() || query.trim() || 'results').toLowerCase();
-    const zipOutcome = applyZipFilter(stateFiltered, targetZip ?? '', zipCenter, categoryLabel);
 
-    places = zipOutcome.places;
-    locationMessage = zipOutcome.locationMessage;
-
-    // Show city+state banner when state filtering was applied and no ZIP message exists
-    if (!locationMessage && cityState && stateFiltered.length < intentFiltered.length) {
-      locationMessage = `Showing results in ${cityState.city}, ${cityState.state}`;
+    if (targetZip) {
+      // ZIP path: ZIP radius filter (hard eligibility)
+      const zipOutcome = applyZipFilter(intentFiltered, targetZip, zipCenter, categoryLabel);
+      places = zipOutcome.places;
+      locationMessage = zipOutcome.locationMessage;
+    } else if (cityState) {
+      // City+state path:
+      //   1. Hard-filter by state (drops Hudson MA / Hudson NY)
+      //   2. Then filter to city name / distance radius (drops Stow, OH etc.)
+      const stateFiltered = filterByState(intentFiltered, cityState.state);
+      const cityOutcome = applyCityFilter(stateFiltered, cityState, cityStateCenter, categoryLabel);
+      places = cityOutcome.places;
+      locationMessage = cityOutcome.locationMessage;
+    } else {
+      places = intentFiltered;
     }
   } catch (err) {
     // Log details server-side; show only a generic message to the client
