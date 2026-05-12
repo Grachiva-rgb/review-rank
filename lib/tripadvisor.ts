@@ -256,17 +256,17 @@ export async function getOrFetchTAData(
     const liveEnrich = async (): Promise<TripadvisorBusinessData | null> => {
       const taId = await searchTALocation(name, address, taCategory);
       if (!taId) {
-        await saveNegativeMapping(googlePlaceId);
+        saveNegativeMapping(googlePlaceId).catch(() => {}); // non-blocking
         return null;
       }
       const taData = await fetchTALocationDetails(taId);
       if (!taData) {
-        await saveNegativeMapping(googlePlaceId);
+        saveNegativeMapping(googlePlaceId).catch(() => {}); // non-blocking
         return null;
       }
-      // Cache result
-      await saveTAMapping(googlePlaceId, taId, 80);
-      await saveTABusinessData(googlePlaceId, taData);
+      // Fire-and-forget cache writes — never block returning the TA data
+      saveTAMapping(googlePlaceId, taId, 80).catch(() => {});
+      saveTABusinessData(googlePlaceId, taData).catch(() => {});
       return taData;
     };
 

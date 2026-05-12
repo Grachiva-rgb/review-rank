@@ -255,6 +255,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     'websiteUri',
     'googleMapsUri',
     'reviews',
+    'primaryType',
   ].join(',');
 
   const response = await fetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`, {
@@ -315,9 +316,20 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     rrs.componentScores.bayesian
   );
 
-  const category = detectCategory(displayName?.text ?? '');
   const businessName = displayName?.text ?? '';
   const businessAddress = (p.formattedAddress as string) || '';
+  const primaryType = (p.primaryType as string) || '';
+
+  // Detect category: prefer Google's primaryType for accuracy (catches hotels
+  // with non-obvious names like "The Peninsula"), fall back to name-based detection.
+  const HOSPITALITY_PRIMARY_TYPES = new Set([
+    'lodging', 'hotel', 'motel', 'resort_hotel', 'bed_and_breakfast',
+    'extended_stay_hotel', 'inn', 'hostel', 'tourist_attraction',
+    'amusement_park', 'aquarium', 'art_gallery', 'museum', 'zoo',
+    'national_park', 'state_park', 'theme_park', 'visitor_center',
+  ]);
+  const categoryFromType = HOSPITALITY_PRIMARY_TYPES.has(primaryType) ? 'hospitality' : null;
+  const category = categoryFromType ?? detectCategory(businessName);
 
   // Lazy TA enrichment: checks Supabase cache first; on cache miss calls TA API
   // live and saves result. Non-blocking — null on any failure.
