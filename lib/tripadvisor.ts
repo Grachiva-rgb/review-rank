@@ -174,6 +174,109 @@ export async function getCachedTAData(
   }
 }
 
+/**
+ * Save a "no match" sentinel row so we don't repeatedly query Tripadvisor
+ * for businesses that aren't listed there.
+ */
+async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
+  try {
+    await sbInsert('business_id_mapping', {
+      google_place_id:  googlePlaceId,
+      ta_location_id:   null,
+      match_confidence: 0,
+      matched_at:       new Date().toISOString(),
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Lazy TA enrichment: checks the Supabase cache first; if no entry exists,
+ * calls the Tripadvisor API live to search for and fetch the business,
+ * then caches the result for future requests.
+ *
+ * On no match or any error, saves a negative sentinel so subsequent requests
+ * skip the live lookup. Returns null on any failure — always non-blocking.
+ *
+ * @param googlePlaceId - Google place ID used as the cache key
+ * @param name          - Business display name (used for TA search)
+ * @param address       - Formatted address (improves TA match accuracy)
+ * @param category      - Detected business category (e.g. "hospitality")
+ */
+export async function getOrFetchTAData(
+  googlePlaceId: string,
+  name: string,
+  address: string,
+  category: string
+): Promise<TripadvisorBusinessData | null> {
+  if (!isSupabaseConfigured()) return null;
+  if (!isHospitalityCategory(category)) return null;
+
+  try {
+    // 1. Check cache — includes negative sentinel rows
+    const mappings = await sbSelect<IDMappingRow>(
+      'business_id_mapping',
+      `google_place_id=eq.${encodeURIComponent(googlePlaceId)}&select=ta_location_id,match_confidence`
+    ).catch(() => [] as IDMappingRow[]);
+
+    if (mappings.length > 0) {
+      // Row exists (positive or negative sentinel)
+      const taId = mappings[0].ta_location_id;
+      if (!taId) return null; // negative cache — no TA listing for this business
+
+      // Positive cache — fetch full TA record
+      const rows = await sbSelect<TABusinessRow>(
+        'tripadvisor_businesses',
+        `ta_location_id=eq.${encodeURIComponent(taId)}&select=*`
+      ).catch(() => [] as TABusinessRow[]);
+
+      const row = rows[0];
+      if (row) {
+        return {
+          taLocationId:    row.ta_location_id,
+          rating:          row.rating,
+          reviewCount:     row.review_count,
+          category:        row.category,
+          travelerRanking: row.traveler_ranking ?? undefined,
+          priceLevel:      row.price_level ?? undefined,
+          awards:          row.awards ?? [],
+          subratings:      row.subratings ?? {},
+          lastFetched:     row.fetched_at,
+        };
+      }
+    }
+
+    // 2. Cache miss — call TA API live with a 5-second timeout
+    const taApiKey = process.env.TRIPADVISOR_API_KEY;
+    if (!taApiKey) return null;
+
+    const taCategory = TA_CATEGORY_MAP[category.toLowerCase()] ?? 'hotels';
+
+    const liveEnrich = async (): Promise<TripadvisorBusinessData | null> => {
+      const taId = await searchTALocation(name, address, taCategory);
+      if (!taId) {
+        await saveNegativeMapping(googlePlaceId);
+        return null;
+      }
+      const taData = await fetchTALocationDetails(taId);
+      if (!taData) {
+        await saveNegativeMapping(googlePlaceId);
+        return null;
+      }
+      // Cache result
+      await saveTAMapping(googlePlaceId, taId, 80);
+      await saveTABusinessData(googlePlaceId, taData);
+      return taData;
+    };
+
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+    return await Promise.race([liveEnrich(), timeout]);
+  } catch {
+    return null;
+  }
+}
+
 // ─── Tripadvisor API client (ingestion jobs only) ─────────────────────────────
 
 function taApiKey(): string {
