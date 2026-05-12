@@ -49,6 +49,20 @@ export default function SearchForm({
     }
   }, [lastLocation, defaultLocation]);
 
+  // On mount: silently check if geolocation permission is already denied.
+  // If so, mark gpsDeniedRef immediately so the UI shows the location hint
+  // without the user having to tap the GPS button first.
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    if (!('permissions' in navigator)) return;
+    navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+      if (result.state === 'denied') {
+        gpsDeniedRef.current = true;
+        setGpsError('Location access is off — enter your city, state, or ZIP below.');
+      }
+    }).catch(() => { /* permissions API not available — ignore */ });
+  }, []);
+
   const fetchSuggestions = useCallback(async (q: string) => {
     if (q.length < 2) { setSuggestions([]); return; }
     try {
@@ -199,9 +213,9 @@ export default function SearchForm({
       const code = (err as { code?: number }).code;
       if (code === 1) {
         gpsDeniedRef.current = true;
-        if (!silent) setGpsError('Location access denied — type your city below.');
+        if (!silent) setGpsError('Location access is off — enter your city, state, or ZIP below.');
       } else {
-        if (!silent) setGpsError('Could not get your location — type your city below.');
+        if (!silent) setGpsError('Could not get your location — type your city, state, or ZIP below.');
       }
       locationRef.current?.focus();
     }
@@ -326,8 +340,16 @@ export default function SearchForm({
             Search
           </button>
         </form>
-        {(submitError || gpsError) && (
-          <p className="text-sm text-red-600">{submitError || gpsError}</p>
+        {submitError && (
+          <p className="text-sm text-red-600 mt-1">{submitError}</p>
+        )}
+        {gpsError && !submitError && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <span>{gpsError}</span>
+          </div>
         )}
       </div>
     );
@@ -408,8 +430,24 @@ export default function SearchForm({
         </div>
       </div>
 
-      {(submitError || gpsError) && (
-        <p className="text-sm text-red-600 mt-2">{submitError || gpsError}</p>
+      {submitError && (
+        <p className="text-sm text-red-600 mt-2">{submitError}</p>
+      )}
+      {gpsError && !submitError && (
+        <div className="mt-2 flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <div>
+            <span className="font-medium">Location access is off.</span>
+            {' '}Type your city, state, or ZIP code in the Location field above.
+            {gpsDeniedRef.current && (
+              <span className="block mt-0.5 text-amber-700 text-xs">
+                To enable GPS: go to your browser or phone Settings → Privacy → Location → allow reviewrank.app
+              </span>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-2 mt-2.5">
