@@ -53,24 +53,33 @@ export default function SearchForm({
   }, [lastLocation, defaultLocation]);
 
   // When autoGps=true (e.g. "near me" example searches), attempt GPS on mount.
-  // Silent mode — no error shown unless the user later taps the GPS button.
+  // NOT silent — user explicitly clicked "near me" so if GPS is denied we must
+  // show the amber banner immediately so they know to type their location.
   useEffect(() => {
-    if (autoGps) handleGps(true);
+    if (autoGps) handleGps(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGps]);
 
   // On mount: silently check if geolocation permission is already denied.
-  // If so, mark gpsDeniedRef immediately so the UI shows the location hint
-  // without the user having to tap the GPS button first.
+  // Uses the Permissions API where available (Chrome/Android).
+  // iOS Safari often doesn't support this — that's OK, the autoGps path
+  // calls handleGps(false) directly which will show the banner on denial.
   useEffect(() => {
     if (typeof navigator === 'undefined') return;
     if (!('permissions' in navigator)) return;
-    navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
-      if (result.state === 'denied') {
-        gpsDeniedRef.current = true;
-        setGpsError('Location access is off — enter your city, state, or ZIP below.');
-      }
-    }).catch(() => { /* permissions API not available — ignore */ });
+    navigator.permissions
+      .query({ name: 'geolocation' as PermissionName })
+      .then((result) => {
+        if (result.state === 'denied') {
+          gpsDeniedRef.current = true;
+          if (!autoGps) {
+            // autoGps will show its own banner via handleGps(false); avoid duplicate
+            setGpsError('Location access is off — enter your city, state, or ZIP below.');
+          }
+        }
+      })
+      .catch(() => { /* Permissions API not available on this browser — ignore */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSuggestions = useCallback(async (q: string) => {
