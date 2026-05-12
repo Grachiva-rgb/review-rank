@@ -14,12 +14,15 @@ interface SearchFormProps {
   defaultLocation?: string;
   defaultCategory?: string;
   variant?: 'hero' | 'compact';
+  /** When true, automatically attempt GPS lookup on mount (used for "near me" searches) */
+  autoGps?: boolean;
 }
 
 export default function SearchForm({
   defaultLocation = '',
   defaultCategory = '',
   variant = 'hero',
+  autoGps = false,
 }: SearchFormProps) {
   const router = useRouter();
   const lastLocation = useLastLocation();
@@ -48,6 +51,13 @@ export default function SearchForm({
       setLocationValue(lastLocation);
     }
   }, [lastLocation, defaultLocation]);
+
+  // When autoGps=true (e.g. "near me" example searches), attempt GPS on mount.
+  // Silent mode — no error shown unless the user later taps the GPS button.
+  useEffect(() => {
+    if (autoGps) handleGps(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGps]);
 
   // On mount: silently check if geolocation permission is already denied.
   // If so, mark gpsDeniedRef immediately so the UI shows the location hint

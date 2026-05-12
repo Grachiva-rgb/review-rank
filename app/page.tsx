@@ -5,7 +5,7 @@ import { SEO_CATEGORIES, SEO_CITIES } from '@/lib/seo';
 import { jsonLd } from '@/lib/jsonLd';
 
 interface HomePageProps {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; nearme?: string }>;
 }
 
 const EXAMPLE_SEARCHES = [
@@ -73,6 +73,7 @@ const FEATURED_COMBOS = [
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const defaultCategory = (params.category || '').slice(0, 100);
+  const autoGps = params.nearme === '1';
   return (
     <main className="relative min-h-screen flex flex-col bg-[#FAF7F0]">
       <script
@@ -121,7 +122,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             so you can choose with confidence.
           </p>
 
-          <SearchForm defaultCategory={defaultCategory} />
+          <SearchForm defaultCategory={defaultCategory} autoGps={autoGps} />
 
           {/* Example searches */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
@@ -129,7 +130,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {EXAMPLE_SEARCHES.map((ex) => (
               <Link
                 key={ex.label}
-                href={`/?category=${encodeURIComponent(ex.category)}`}
+                href={
+                  ex.label.toLowerCase().includes('near me')
+                    ? `/?category=${encodeURIComponent(ex.category)}&nearme=1`
+                    : `/?category=${encodeURIComponent(ex.category)}`
+                }
                 className="rounded-full border border-[#D9CEC8] bg-white px-3 py-1.5 text-xs text-[#5A4A3F] hover:border-[#8B5E3C] hover:text-[#8B5E3C] transition-all shadow-sm"
               >
                 {ex.label}

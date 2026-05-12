@@ -7,6 +7,7 @@ import { SEO_CATEGORIES, SEO_CITIES, getCategoryBySlug, getCityBySlug } from '@/
 import NavLogo from '@/components/NavLogo';
 import BusinessCard from '@/components/BusinessCard';
 import CompareBar from '@/components/CompareBar';
+import NearMeSearch from '@/components/NearMeSearch';
 
 // Revalidate each page once per day (ISR)
 export const revalidate = 86400;
@@ -120,6 +121,13 @@ export default async function CategoryCityPage({ params }: PageProps) {
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-10">
+        {/* Near-me CTA — lets users search their actual location when not in this city */}
+        <NearMeSearch
+          categoryPlural={cat.plural}
+          categorySlug={cat.slug}
+          currentCity={city.display}
+        />
+
         {/* Header */}
         <div className="mb-8">
           {/* Breadcrumb */}
