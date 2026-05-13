@@ -893,16 +893,32 @@ function lookupIntent(normalized: string): SearchIntentConfig | null {
 }
 
 /**
- * Rewrites an ambiguous category string into a clearer Google Places query.
+ * Rewrites an ambiguous category string into a clearer Google Places query,
+ * while preserving any location context ("in …", "near …") in the original.
  *
  * Examples:
- *   "gym"          → "fitness gym"
- *   "fitness gym"  → "fitness gym"  (already specific, returned as-is)
- *   "plumber"      → "plumber"      (not in map, returned as-is)
- *   "nail"         → "nail salon"
+ *   "gym"                    → "fitness gym"
+ *   "hotels in new orleans"  → "hotel in new orleans"  (location preserved)
+ *   "best plumber near me"   → "plumber plumbing service near me"
+ *   "nail"                   → "nail salon"
  */
 export function normalizeSearchQuery(category: string): string {
   if (!category.trim()) return category;
+
+  // Split "category in/near location" so the location suffix is preserved
+  const locationMatch = category.match(/^(.+?)\s+\b(in|near)\s+(.+)$/i);
+  if (locationMatch) {
+    const categoryPart = locationMatch[1].trim();
+    const preposition = locationMatch[2];
+    const locationPart = locationMatch[3].trim();
+    const key = extractIntentKey(categoryPart);
+    const intent = lookupIntent(key);
+    if (intent && intent.canonicalQuery.toLowerCase() !== key) {
+      return `${intent.canonicalQuery} ${preposition} ${locationPart}`;
+    }
+    return category; // no rewrite needed, return original including location
+  }
+
   const key = extractIntentKey(category);
   const intent = lookupIntent(key);
   if (!intent) return category;

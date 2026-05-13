@@ -9,6 +9,7 @@ import {
   geocodeCityState,
   filterByState,
   applyCityFilter,
+  geocodeLocationString,
 } from '@/lib/locationIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
@@ -92,14 +93,26 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     ? await geocodeCityState(cityState.city, cityState.state, apiKey).catch(() => null)
     : null;
 
-  // Location bias priority: GPS > ZIP centroid (tight 8 km) > city+state centroid (15 km)
+  // Fallback: geocode the raw location string for city-only searches with no
+  // state abbreviation (e.g. "new orleans", "downtown chicago"). Provides a
+  // location bias so Google Places returns results in the correct metro area.
+  const rawLocationStr = location.trim() ||
+    (normalizedCategory.match(/\b(?:in|near)\s+(.+)$/i)?.[1] ?? '');
+  const locationOnlyCenter =
+    !isGps && !zipCenter && !cityStateCenter && rawLocationStr
+      ? await geocodeLocationString(rawLocationStr, apiKey).catch(() => null)
+      : null;
+
+  // Location bias priority: GPS > ZIP (8 km) > city+state (15 km) > city-only (25 km)
   const locationBias = isGps
     ? { lat: validLat!, lng: validLng! }
     : zipCenter
       ? { lat: zipCenter.lat, lng: zipCenter.lng, radiusMeters: 8000 }
       : cityStateCenter
         ? { lat: cityStateCenter.lat, lng: cityStateCenter.lng, radiusMeters: 15000 }
-        : undefined;
+        : locationOnlyCenter
+          ? { lat: locationOnlyCenter.lat, lng: locationOnlyCenter.lng, radiusMeters: 25000 }
+          : undefined;
 
   // Build the text query — q takes precedence; if absent, combine category + location
   const rawQuery =

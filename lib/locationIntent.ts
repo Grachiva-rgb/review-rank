@@ -209,6 +209,39 @@ export interface ZipCenter {
 }
 
 /**
+ * Geocode any free-form location string (city name, neighborhood, address)
+ * to a lat/lng centroid. Used as a fallback when no ZIP or city+state
+ * abbreviation is detected — e.g. "new orleans", "downtown houston".
+ * Cached 24 h. Returns null on any failure.
+ */
+export async function geocodeLocationString(
+  location: string,
+  apiKey: string
+): Promise<ZipCenter | null> {
+  try {
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json` +
+      `?address=${encodeURIComponent(location)}` +
+      `&components=country:US` +
+      `&key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, { next: { revalidate: 86400 } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status: string;
+      results: Array<{
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+      }>;
+    };
+    if (data.status !== 'OK' || !data.results[0]) return null;
+    const { geometry, formatted_address } = data.results[0];
+    return { lat: geometry.location.lat, lng: geometry.location.lng, display: formatted_address };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve a ZIP code to a geographic centroid using the Google Geocoding API.
  * Results are cached for 24 hours (Vercel CDN / Next.js fetch cache).
  * Returns null on any failure — the caller should degrade gracefully.
