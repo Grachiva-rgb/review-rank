@@ -604,6 +604,255 @@ export const SEARCH_INTENT_MAP: Record<string, SearchIntentConfig> = {
     excludePatterns: [],
     includePatterns: [/motel/i, /motor\s*inn/i, /inn/i, /lodge/i],
   },
+
+  // ─── Hospitality & Travel (continued) ─────────────────────────────────────
+
+  resort: {
+    canonicalQuery: 'resort hotel',
+    excludePatterns: [/resort\s*(supply|management\s*school|software)/i],
+    includePatterns: [/resort/i, /spa\s*resort/i, /beach\s*resort/i, /mountain\s*resort/i],
+  },
+
+  'country club': {
+    canonicalQuery: 'country club golf club',
+    excludePatterns: [
+      /country\s*(store|kitchen|diner|market)/i,
+      /nightclub/i,
+      /dance\s*club/i,
+    ],
+    includePatterns: [
+      /country\s*club/i,
+      /golf\s*(club|course)/i,
+      /private\s*(club|member)/i,
+      /tennis\s*club/i,
+    ],
+  },
+
+  winery: {
+    canonicalQuery: 'winery wine tasting',
+    excludePatterns: [
+      /wine\s*(supply|wholesale|distributor)/i,
+      /liquor\s*store/i,
+    ],
+    includePatterns: [/winery/i, /vineyard/i, /wine\s*(tasting|bar|room|cellar)/i],
+  },
+
+  brewery: {
+    canonicalQuery: 'brewery craft beer taproom',
+    excludePatterns: [
+      /brewing\s*(supply|equipment|school)/i,
+      /home\s*brew\s*(supply|store)/i,
+    ],
+    includePatterns: [
+      /brewery/i,
+      /brewpub/i,
+      /taproom/i,
+      /craft\s*(beer|brew)/i,
+      /microbrewery/i,
+    ],
+  },
+
+  'wedding venue': {
+    canonicalQuery: 'wedding venue event space',
+    excludePatterns: [
+      /wedding\s*(supply|dress|gown|ring|jewelry)/i,
+      /bridal\s*shop/i,
+    ],
+    includePatterns: [
+      /wedding\s*(venue|hall|chapel|barn)/i,
+      /event\s*(venue|space|hall)/i,
+      /banquet\s*(hall|room)/i,
+    ],
+  },
+
+  // ─── Urgent & Walk-in Care ─────────────────────────────────────────────────
+
+  'urgent care': {
+    canonicalQuery: 'urgent care walk-in clinic',
+    excludePatterns: [
+      /urgent\s*care\s*(staffing|software|billing)/i,
+      /emergency\s*room/i,
+      /hospital\s*emergency/i,
+    ],
+    includePatterns: [
+      /urgent\s*care/i,
+      /walk.?in\s*clinic/i,
+      /immediate\s*care/i,
+      /quick\s*care/i,
+      /fastmed/i,
+    ],
+  },
+
+  // ─── Fitness (additional) ──────────────────────────────────────────────────
+
+  'martial arts': {
+    canonicalQuery: 'martial arts studio',
+    excludePatterns: [
+      /martial\s*arts\s*(supply|equipment|school\s*supply)/i,
+    ],
+    includePatterns: [
+      /martial\s*arts/i,
+      /karate/i,
+      /taekwondo/i,
+      /jiu.?jitsu/i,
+      /judo/i,
+      /mma/i,
+      /kung\s*fu/i,
+    ],
+  },
+
+  karate: {
+    canonicalQuery: 'karate martial arts studio',
+    excludePatterns: [],
+    includePatterns: [
+      /karate/i,
+      /martial\s*arts/i,
+      /taekwondo/i,
+      /jiu.?jitsu/i,
+      /dojo/i,
+    ],
+  },
+
+  boxing: {
+    canonicalQuery: 'boxing gym',
+    excludePatterns: [
+      /boxing\s*(supply|equipment\s*store)/i,
+    ],
+    includePatterns: [
+      /boxing\s*(gym|club|studio|center)/i,
+      /fight\s*(club|gym)/i,
+      /muay\s*thai/i,
+      /kickboxing/i,
+    ],
+  },
+
+  // ─── Pet Care (additional) ─────────────────────────────────────────────────
+
+  'dog boarding': {
+    canonicalQuery: 'dog boarding pet boarding',
+    excludePatterns: [/boarding\s*(school|pass)/i],
+    includePatterns: [
+      /dog\s*(boarding|kennel|daycare|hotel)/i,
+      /pet\s*(boarding|resort|hotel)/i,
+      /kennel/i,
+    ],
+  },
+
+  'dog daycare': {
+    canonicalQuery: 'dog daycare pet boarding',
+    excludePatterns: [],
+    includePatterns: [/dog\s*(daycare|day\s*care)/i, /pet\s*(daycare|day\s*care)/i, /doggy\s*daycare/i],
+  },
+
+  // ─── Auto (additional) ─────────────────────────────────────────────────────
+
+  'car wash': {
+    canonicalQuery: 'car wash auto detailing',
+    excludePatterns: [
+      /car\s*wash\s*(supply|equipment)/i,
+      /auto\s*repair/i,
+      /mechanic/i,
+    ],
+    includePatterns: [
+      /car\s*wash/i,
+      /auto\s*(detail|spa|wash)/i,
+      /hand\s*wash/i,
+      /mobile\s*detail/i,
+    ],
+  },
+
+  // ─── Finance (additional) ──────────────────────────────────────────────────
+
+  'financial advisor': {
+    canonicalQuery: 'financial advisor wealth management',
+    excludePatterns: [
+      /financial\s*(software|school|app|platform)/i,
+      /investment\s*app/i,
+    ],
+    includePatterns: [
+      /financial\s*(advisor|planner|consultant)/i,
+      /wealth\s*(management|advisor)/i,
+      /investment\s*(advisor|management)/i,
+      /cfp/i,
+    ],
+  },
+
+  mortgage: {
+    canonicalQuery: 'mortgage broker lender',
+    excludePatterns: [/mortgage\s*(software|school|training)/i],
+    includePatterns: [
+      /mortgage\s*(broker|lender|company)/i,
+      /home\s*(loan|lending)/i,
+      /refinanc/i,
+    ],
+  },
+
+  // ─── Legal (additional) ────────────────────────────────────────────────────
+
+  'divorce attorney': {
+    canonicalQuery: 'divorce attorney family lawyer',
+    excludePatterns: [/law\s*school/i, /legal\s*software/i],
+    includePatterns: [
+      /divorce\s*(attorney|lawyer)/i,
+      /family\s*(law|attorney|lawyer)/i,
+      /custody/i,
+      /matrimonial/i,
+    ],
+  },
+
+  'personal injury': {
+    canonicalQuery: 'personal injury attorney lawyer',
+    excludePatterns: [/law\s*school/i],
+    includePatterns: [
+      /personal\s*injury/i,
+      /accident\s*(attorney|lawyer)/i,
+      /injury\s*(attorney|lawyer|law)/i,
+    ],
+  },
+
+  // ─── Events & Creative ─────────────────────────────────────────────────────
+
+  florist: {
+    canonicalQuery: 'florist flower shop',
+    excludePatterns: [
+      /floral\s*(supply|wholesale|school)/i,
+      /craft\s*(store|supply)/i,
+    ],
+    includePatterns: [
+      /florist/i,
+      /flower\s*(shop|boutique|studio)/i,
+      /floral\s*(design|studio)/i,
+    ],
+  },
+
+  catering: {
+    canonicalQuery: 'catering company event catering',
+    excludePatterns: [
+      /catering\s*(supply|equipment|school)/i,
+      /food\s*(distributor|wholesaler)/i,
+    ],
+    includePatterns: [
+      /cater(ing|er)/i,
+      /event\s*(catering|food\s*service)/i,
+      /wedding\s*cater/i,
+    ],
+  },
+
+  photographer: {
+    canonicalQuery: 'photographer photography studio',
+    excludePatterns: [
+      /camera\s*(store|repair|rental)/i,
+      /stock\s*photo/i,
+      /photo\s*(lab|print)/i,
+    ],
+    includePatterns: [
+      /photographer/i,
+      /photography\s*(studio|service)/i,
+      /portrait\s*(studio|photography)/i,
+      /wedding\s*photo/i,
+    ],
+  },
+
 };
 
 // ─── Word strip list ─────────────────────────────────────────────────────────
@@ -720,4 +969,27 @@ export function filterByIntent<T extends { name: string }>(
   }
 
   return [...strong, ...rest];
+}
+
+/**
+ * Returns a sort tier for a business name given a search category.
+ *
+ *  0 — strong include match  (rises to the top of results)
+ *  1 — neutral               (no match either way)
+ *  2 — soft exclude          (kept only due to MIN_RESULTS floor; sinks to bottom)
+ *
+ * Used for multi-key sorting in the results page:
+ *   sort by intentTier ASC first, then reviewRankScore DESC.
+ * This ensures intent quality gates the ordering BEFORE reputation score,
+ * so a gymnastics school with a high score doesn't outrank a fitness gym.
+ */
+export function getIntentTier(businessName: string, category: string): 0 | 1 | 2 {
+  if (!businessName || !category) return 1;
+  const key = extractIntentKey(category);
+  const intent = lookupIntent(key);
+  if (!intent) return 1;
+
+  if (intent.includePatterns?.some((rx) => rx.test(businessName))) return 0;
+  if (intent.excludePatterns.some((rx) => rx.test(businessName))) return 2;
+  return 1;
 }

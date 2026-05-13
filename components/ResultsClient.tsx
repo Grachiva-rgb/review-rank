@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Place, SortFilter } from '@/lib/types';
 import { detectCategory, BusinessCategory } from '@/lib/ranking';
+import { getIntentTier } from '@/lib/searchIntent';
 import BusinessCard from './BusinessCard';
 import FilterBar from './FilterBar';
 import SearchForm from './SearchForm';
@@ -51,11 +52,21 @@ export default function ResultsClient({
     [category, query]
   );
 
+  // Derive the effective search term for intent-tier calculation
+  const searchTerm = category.trim() || query.trim();
+
   const sortedPlaces = useMemo(() => {
     return [...places].sort((a, b) => {
-      // Default "smart_score" filter now sorts by the 0–100 Review Rank Score
-      // which blends Bayesian rating, volume, sentiment, and consistency.
-      if (filter === 'smart_score') return b.review_rank_score - a.review_rank_score;
+      // Intent-aware sort: when using the default ReviewRank sort, intent quality
+      // takes precedence over reputation score.
+      // Tier 0 = strong intent match, 1 = neutral, 2 = soft exclude.
+      // Within each tier, sort by ReviewRank score descending.
+      if (filter === 'smart_score') {
+        const tierA = getIntentTier(a.name, searchTerm);
+        const tierB = getIntentTier(b.name, searchTerm);
+        if (tierA !== tierB) return tierA - tierB;
+        return b.review_rank_score - a.review_rank_score;
+      }
       if (filter === 'rating') return b.rating - a.rating;
       if (filter === 'reviews') return b.user_ratings_total - a.user_ratings_total;
       // rising_stars: high rating, prioritise under-300-review businesses
