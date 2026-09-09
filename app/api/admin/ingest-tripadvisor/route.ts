@@ -17,7 +17,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getPlaceDetails } from '@/lib/places';
+import { getPlaceDetails, categorizePlace } from '@/lib/places';
 import {
   searchTALocation,
   fetchTALocationDetails,
@@ -26,7 +26,6 @@ import {
   getCachedTAData,
 } from '@/lib/tripadvisor';
 import { sbSelect, isSupabaseConfigured } from '@/lib/supabase';
-import { detectCategory } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -48,6 +47,18 @@ interface StaleRow {
   ta_location_id: string | null;
 }
 
+/** How long TA data stays fresh before the job re-fetches it. */
+const REFRESH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * How long to leave a "not on Tripadvisor" business alone before trying again.
+ *
+ * Without this the job re-searched every unmatched business every week forever,
+ * which is pure spend — a restaurant that isn't listed this week almost
+ * certainly isn't listed next week either.
+ */
+const RETRY_UNMATCHED_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
+
 // Also expose as GET so Vercel Cron can invoke it (crons use GET by default)
 export async function GET(request: Request): Promise<NextResponse> {
   return POST(request);
@@ -68,31 +79,42 @@ export async function POST(request: Request): Promise<NextResponse> {
     placeIds?: string[];
   };
 
-  let placeIds: string[] = [];
+  // A known ta_location_id means we can refresh with a single TA details call —
+  // no Google Place Details lookup and no TA search. Only genuinely unmatched
+  // businesses pay for the full match path.
+  const targets = new Map<string, string | null>();
 
   if (body.placeId) {
-    placeIds = [body.placeId];
+    targets.set(body.placeId, null);
   } else if (Array.isArray(body.placeIds) && body.placeIds.length > 0) {
-    placeIds = body.placeIds.slice(0, 50); // hard cap per batch
+    for (const id of body.placeIds.slice(0, 50)) targets.set(id, null); // hard cap per batch
   } else {
-    // Refresh stale: records not updated in the last 7 days
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const stale = await sbSelect<StaleRow>(
+    const staleCutoff = new Date(Date.now() - REFRESH_AFTER_MS).toISOString();
+    const retryCutoff = new Date(Date.now() - RETRY_UNMATCHED_AFTER_MS).toISOString();
+
+    // Already matched, data has gone stale → cheap refresh.
+    const staleTARows = await sbSelect<{ google_place_id: string; ta_location_id: string }>(
+      'tripadvisor_businesses',
+      `fetched_at=lt.${encodeURIComponent(staleCutoff)}&select=google_place_id,ta_location_id&limit=50`
+    ).catch(() => [] as { google_place_id: string; ta_location_id: string }[]);
+
+    for (const row of staleTARows) {
+      if (row.google_place_id) targets.set(row.google_place_id, row.ta_location_id);
+    }
+
+    // Never matched, and not attempted recently → full match path.
+    const unmatched = await sbSelect<StaleRow>(
       'business_id_mapping',
-      `select=google_place_id,ta_location_id&order=matched_at.asc.nullsfirst&limit=50`
+      `ta_location_id=is.null&or=(matched_at.is.null,matched_at.lt.${encodeURIComponent(retryCutoff)})` +
+        `&select=google_place_id,ta_location_id&order=matched_at.asc.nullsfirst&limit=50`
     ).catch(() => [] as StaleRow[]);
 
-    const staleTARows = await sbSelect<{ google_place_id: string }>(
-      'tripadvisor_businesses',
-      `fetched_at=lt.${encodeURIComponent(sevenDaysAgo)}&select=google_place_id&limit=50`
-    ).catch(() => [] as { google_place_id: string }[]);
-
-    const staleSet = new Set([
-      ...stale.filter((r) => !r.ta_location_id).map((r) => r.google_place_id),
-      ...staleTARows.map((r) => r.google_place_id),
-    ]);
-    placeIds = Array.from(staleSet).slice(0, 50);
+    for (const row of unmatched) {
+      if (!targets.has(row.google_place_id)) targets.set(row.google_place_id, null);
+    }
   }
+
+  const placeIds = Array.from(targets.keys()).slice(0, 50);
 
   if (placeIds.length === 0) {
     return NextResponse.json({ message: 'Nothing to ingest', ingested: 0 });
@@ -103,28 +125,36 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   for (const placeId of placeIds) {
     try {
-      // Fetch Google data to get business name + address
-      const place = await getPlaceDetails(placeId).catch(() => null);
-      if (!place) {
-        results.push({ placeId, status: 'error', detail: 'Google place not found' });
-        continue;
-      }
-
-      // Check if already cached and fresh (< 7 days)
+      // Check freshness before spending anything on this business.
       const existing = await getCachedTAData(placeId).catch(() => null);
       if (existing?.lastFetched) {
         const age = Date.now() - new Date(existing.lastFetched).getTime();
-        if (age < 7 * 24 * 60 * 60 * 1000) {
+        if (age < REFRESH_AFTER_MS) {
           results.push({ placeId, status: 'skipped', detail: 'Cache fresh' });
           continue;
         }
       }
 
-      const category = detectCategory(place.name);
-      const address  = place.formatted_address ?? '';
+      // Refresh path: we already know the TA location, so skip both the Google
+      // Place Details call and the TA search.
+      let taLocationId = targets.get(placeId) ?? existing?.taLocationId ?? null;
 
-      // Search Tripadvisor for a matching location
-      const taLocationId = await searchTALocation(place.name, address, category);
+      if (!taLocationId) {
+        // Match path: Google gives us the name, address, and type to search on.
+        const place = await getPlaceDetails(placeId).catch(() => null);
+        if (!place) {
+          results.push({ placeId, status: 'error', detail: 'Google place not found' });
+          continue;
+        }
+
+        // Use the same primaryType-aware categorization as the consumer path,
+        // so a museum is searched under attractions rather than hotels.
+        const { taCategory, category } = categorizePlace(place.name, place.primary_type);
+        const address = place.formatted_address ?? '';
+
+        taLocationId = await searchTALocation(place.name, address, taCategory ?? category);
+      }
+
       if (!taLocationId) {
         results.push({ placeId, status: 'error', detail: 'No TA match found' });
         continue;

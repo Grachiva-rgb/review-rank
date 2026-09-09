@@ -115,6 +115,8 @@ export interface PlaceDetail {
     weekday_text?: string[];
   };
   price_level?: number;
+  /** Google's primaryType, e.g. "museum" — more reliable than the name for categorization. */
+  primary_type?: string;
   formatted_phone_number?: string;
   website?: string;
   url?: string;

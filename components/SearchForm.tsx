@@ -83,7 +83,9 @@ export default function SearchForm({
   }, []);
 
   const fetchSuggestions = useCallback(async (q: string) => {
-    if (q.length < 2) { setSuggestions([]); return; }
+    // Matches MIN_QUERY_LENGTH in the autocomplete route — a 2-character prefix
+    // matches too much to be useful, so don't pay Google for it.
+    if (q.trim().length < 3) { setSuggestions([]); return; }
     try {
       const res  = await fetch(`/api/location-autocomplete?q=${encodeURIComponent(q)}`);
       const data = await res.json();

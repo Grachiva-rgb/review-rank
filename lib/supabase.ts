@@ -58,12 +58,25 @@ export async function sbSelect<T = unknown>(
   return (await res.json()) as T[];
 }
 
+/**
+ * Upsert a row.
+ *
+ * PostgREST resolves `merge-duplicates` against the primary key unless told
+ * otherwise. For tables whose natural key is a UNIQUE column rather than the
+ * PK — business_id_mapping, whose PK is a generated UUID — pass `onConflict`
+ * with that column name, or the write is treated as a plain insert and fails on
+ * the unique constraint.
+ */
 export async function sbUpsert<T extends object>(
   table: string,
-  row: T
+  row: T,
+  opts: { onConflict?: string } = {}
 ): Promise<void> {
   if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL not set');
-  const res = await fetch(`${url}/rest/v1/${table}`, {
+  const qs = opts.onConflict
+    ? `?on_conflict=${encodeURIComponent(opts.onConflict)}`
+    : '';
+  const res = await fetch(`${url}/rest/v1/${table}${qs}`, {
     method: 'POST',
     headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
     body: JSON.stringify(row),

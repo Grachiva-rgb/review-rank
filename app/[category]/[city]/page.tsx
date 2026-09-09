@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { jsonLd } from '@/lib/jsonLd';
 import Link from 'next/link';
-import { searchPlaces } from '@/lib/places';
+import { searchPlaces, SEO_SEARCH_CACHE_TTL_MS } from '@/lib/places';
 import { SEO_CATEGORIES, SEO_CITIES, getCategoryBySlug, getCityBySlug } from '@/lib/seo';
 import NavLogo from '@/components/NavLogo';
 import BusinessCard from '@/components/BusinessCard';
@@ -55,7 +55,12 @@ export default async function CategoryCityPage({ params }: PageProps) {
   let fetchError = false;
 
   try {
-    places = await searchPlaces(`${cat.searchQuery} in ${city.searchName}`);
+    // Accept results up to 20 h old. There are 260 of these pages and each one
+    // costs a Text Search call to build, so a redeploy inside the window is
+    // free; the daily ISR pass past the window still refreshes the rankings.
+    places = await searchPlaces(`${cat.searchQuery} in ${city.searchName}`, {
+      cacheTtlMs: SEO_SEARCH_CACHE_TTL_MS,
+    });
     places.sort((a, b) => b.review_rank_score - a.review_rank_score);
   } catch {
     fetchError = true;

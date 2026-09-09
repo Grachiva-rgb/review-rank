@@ -64,11 +64,25 @@ interface SearchOptions {
   lat?: number;
   lng?: number;
   radiusMeters?: number;
+  /** Oldest acceptable cached result. Defaults to SEARCH_CACHE_TTL_MS. */
+  cacheTtlMs?: number;
 }
 
 // ─── Search result cache (Supabase) ──────────────────────────────────────────
 
+/** Default freshness window, used for interactive user searches. */
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Freshness window for the pre-generated /[category]/[city] pages.
+ *
+ * Those pages are ISR'd once every 24 h, which is the freshness guarantee we
+ * actually make for them — so anything shorter than that only causes the same
+ * 260 Text Search calls to be re-bought on every deploy, since a build always
+ * missed the 30-minute window. Sitting just under the revalidate period means a
+ * redeploy is free while the daily refresh still hits Google exactly once.
+ */
+export const SEO_SEARCH_CACHE_TTL_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 /**
  * Build a stable cache key from the search query and optional location bias.
@@ -82,10 +96,10 @@ function buildSearchCacheKey(query: string, options?: SearchOptions): string {
   return `search:${q}:${lat}:${lng}`;
 }
 
-async function getCachedSearch(cacheKey: string): Promise<Place[] | null> {
+async function getCachedSearch(cacheKey: string, ttlMs: number): Promise<Place[] | null> {
   if (!isSupabaseConfigured()) return null;
   try {
-    const cutoff = new Date(Date.now() - SEARCH_CACHE_TTL_MS).toISOString();
+    const cutoff = new Date(Date.now() - ttlMs).toISOString();
     // Race against a 1-second timeout so a slow/unreachable Supabase never blocks search
     const fetchPromise = sbSelect<{ results: Place[] }>(
       'search_cache',
@@ -124,15 +138,17 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
   }
 
-  // Check Supabase cache before calling Google — saves a Pro-tier API call for
-  // any query repeated within the 30-minute TTL window.
+  // Check Supabase cache before calling Google — saves a billed API call for
+  // any query repeated inside the caller's freshness window.
   const cacheKey = buildSearchCacheKey(query, options);
-  const cached = await getCachedSearch(cacheKey);
+  const cached = await getCachedSearch(cacheKey, options?.cacheTtlMs ?? SEARCH_CACHE_TTL_MS);
   if (cached) return cached;
 
-  // NOTE: reviews intentionally excluded here — requesting reviews elevates the call
-  // to the Pro billing tier (5–10x cost). Reviews are only fetched in getPlaceDetails
-  // where they are actually needed for the scoring breakdown on the detail page.
+  // NOTE: reviews intentionally excluded here — requesting reviews elevates the
+  // call to the most expensive billing tier. Reviews are only fetched in
+  // getPlaceDetails, where the detail page's scoring breakdown needs them.
+  // photos is excluded too: nothing renders a Places photo, so requesting them
+  // only inflated the response.
   const fieldMask = [
     'places.id',
     'places.displayName',
@@ -140,7 +156,6 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     'places.userRatingCount',
     'places.formattedAddress',
     'places.location',
-    'places.photos',
     'places.currentOpeningHours',
     'places.priceLevel',
     'places.googleMapsUri',
@@ -214,7 +229,6 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
           lng: location?.longitude ?? 0,
         },
       },
-      photos: (p.photos as Place['photos']) || undefined,
       opening_hours: openingHours ? { open_now: openingHours.openNow } : undefined,
       price_level: PRICE_LEVEL_MAP[p.priceLevel as string] ?? undefined,
       url: (p.googleMapsUri as string) || undefined,
@@ -232,6 +246,54 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
   setCachedSearch(cacheKey, result).catch(() => {});
 
   return result;
+}
+
+// ─── Categorization ──────────────────────────────────────────────────────────
+
+/**
+ * Google primaryType values that mean "somewhere you sleep" vs "somewhere you
+ * visit". Both land in our single `hospitality` category, but Tripadvisor
+ * searches them under different categories — and searching a museum against
+ * TA's hotels category never matches, which used to burn a call and then cache
+ * a permanent "not on Tripadvisor" sentinel for every attraction.
+ */
+const LODGING_PRIMARY_TYPES = new Set([
+  'lodging', 'hotel', 'motel', 'resort_hotel', 'bed_and_breakfast',
+  'extended_stay_hotel', 'inn', 'hostel',
+]);
+
+const ATTRACTION_PRIMARY_TYPES = new Set([
+  'tourist_attraction', 'amusement_park', 'aquarium', 'art_gallery', 'museum',
+  'zoo', 'national_park', 'state_park', 'theme_park', 'visitor_center',
+]);
+
+const RESTAURANT_PRIMARY_TYPES = new Set([
+  'restaurant', 'cafe', 'bakery', 'bar', 'coffee_shop', 'pizza_restaurant',
+  'fast_food_restaurant', 'fine_dining_restaurant', 'steak_house',
+]);
+
+/**
+ * Resolve a business's category, preferring Google's primaryType over the name
+ * (which catches hotels with non-obvious names like "The Peninsula"), and the
+ * Tripadvisor category to search it under.
+ *
+ * Shared with the ingestion job so both paths categorize identically.
+ */
+export function categorizePlace(name: string, primaryType?: string) {
+  const type = (primaryType || '').toLowerCase();
+
+  if (LODGING_PRIMARY_TYPES.has(type)) {
+    return { category: 'hospitality' as const, taCategory: 'hotels' };
+  }
+  if (ATTRACTION_PRIMARY_TYPES.has(type)) {
+    return { category: 'hospitality' as const, taCategory: 'attractions' };
+  }
+  if (RESTAURANT_PRIMARY_TYPES.has(type)) {
+    return { category: 'food' as const, taCategory: 'restaurants' };
+  }
+
+  const category = detectCategory(name);
+  return { category, taCategory: undefined };
 }
 
 // ─── Place Details cache (Supabase) ──────────────────────────────────────────
@@ -384,20 +446,17 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
   const businessAddress = (p.formattedAddress as string) || '';
   const primaryType = (p.primaryType as string) || '';
 
-  // Detect category: prefer Google's primaryType for accuracy (catches hotels
-  // with non-obvious names like "The Peninsula"), fall back to name-based detection.
-  const HOSPITALITY_PRIMARY_TYPES = new Set([
-    'lodging', 'hotel', 'motel', 'resort_hotel', 'bed_and_breakfast',
-    'extended_stay_hotel', 'inn', 'hostel', 'tourist_attraction',
-    'amusement_park', 'aquarium', 'art_gallery', 'museum', 'zoo',
-    'national_park', 'state_park', 'theme_park', 'visitor_center',
-  ]);
-  const categoryFromType = HOSPITALITY_PRIMARY_TYPES.has(primaryType) ? 'hospitality' : null;
-  const category = categoryFromType ?? detectCategory(businessName);
+  const { category, taCategory } = categorizePlace(businessName, primaryType);
 
   // Lazy TA enrichment: checks Supabase cache first; on cache miss calls TA API
   // live and saves result. Non-blocking — null on any failure.
-  const taData = await getOrFetchTAData(placeId, businessName, businessAddress, category).catch(() => null);
+  const taData = await getOrFetchTAData(
+    placeId,
+    businessName,
+    businessAddress,
+    category,
+    taCategory
+  ).catch(() => null);
 
   const multiSourceScore = computeMultiSourceScore(
     rating,
@@ -426,6 +485,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
         }
       : undefined,
     price_level: PRICE_LEVEL_MAP[p.priceLevel as string] ?? undefined,
+    primary_type: primaryType || undefined,
     formatted_phone_number: (p.internationalPhoneNumber as string) || undefined,
     website: (p.websiteUri as string) || undefined,
     url: (p.googleMapsUri as string) || undefined,

@@ -13,7 +13,7 @@ import type {
   TripadvisorBusinessData,
   ReviewSource,
 } from './types';
-import { sbSelect, sbInsert, sbUpdate, isSupabaseConfigured } from './supabase';
+import { sbSelect, sbInsert, sbUpsert, sbUpdate, isSupabaseConfigured } from './supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -30,14 +30,31 @@ export const HOSPITALITY_CATEGORIES = new Set([
   'hospitality',
 ]);
 
-/** TA category type values returned by the Location Search API. */
+/**
+ * Maps our internal category names to the `category` values the TA Location
+ * Search API accepts. Every value is also a key, so applying this map twice is
+ * a no-op — but call `toTACategory()` rather than indexing it directly.
+ *
+ * `hospitality` is our catch-all bucket for both lodging and attractions, so it
+ * can only guess. Callers that know better (e.g. getPlaceDetails, which sees
+ * Google's primaryType) should pass an explicit taCategory override.
+ */
 export const TA_CATEGORY_MAP: Record<string, string> = {
   restaurants: 'restaurants',
   hotels:      'hotels',
   attractions: 'attractions',
   resorts:     'hotels',
   food:        'restaurants',
+  hospitality: 'hotels',
+  tourism:     'attractions',
 };
+
+export const TA_DEFAULT_CATEGORY = 'hotels';
+
+/** Resolve any internal or TA-native category name to a valid TA category. */
+export function toTACategory(category: string): string {
+  return TA_CATEGORY_MAP[category.toLowerCase()] ?? TA_DEFAULT_CATEGORY;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -176,16 +193,17 @@ export async function getCachedTAData(
 
 /**
  * Save a "no match" sentinel row so we don't repeatedly query Tripadvisor
- * for businesses that aren't listed there.
+ * for businesses that aren't listed there. Upserted so a retry refreshes
+ * matched_at — the ingestion job uses that timestamp to back off.
  */
 async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
   try {
-    await sbInsert('business_id_mapping', {
+    await sbUpsert('business_id_mapping', {
       google_place_id:  googlePlaceId,
       ta_location_id:   null,
       match_confidence: 0,
       matched_at:       new Date().toISOString(),
-    });
+    }, { onConflict: 'google_place_id' });
   } catch {
     // Non-fatal
   }
@@ -203,12 +221,16 @@ async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
  * @param name          - Business display name (used for TA search)
  * @param address       - Formatted address (improves TA match accuracy)
  * @param category      - Detected business category (e.g. "hospitality")
+ * @param taCategory    - Optional explicit TA category, for callers that can
+ *                        distinguish lodging from attractions better than our
+ *                        catch-all "hospitality" bucket can
  */
 export async function getOrFetchTAData(
   googlePlaceId: string,
   name: string,
   address: string,
-  category: string
+  category: string,
+  taCategory?: string
 ): Promise<TripadvisorBusinessData | null> {
   if (!isSupabaseConfigured()) return null;
   if (!isHospitalityCategory(category)) return null;
@@ -220,10 +242,15 @@ export async function getOrFetchTAData(
       `google_place_id=eq.${encodeURIComponent(googlePlaceId)}&select=ta_location_id,match_confidence`
     ).catch(() => [] as IDMappingRow[]);
 
+    // A mapping row tells us the TA location ID even when the data row is
+    // missing, which lets us skip the paid search call below.
+    let knownTAId: string | null = null;
+
     if (mappings.length > 0) {
       // Row exists (positive or negative sentinel)
       const taId = mappings[0].ta_location_id;
       if (!taId) return null; // negative cache — no TA listing for this business
+      knownTAId = taId;
 
       // Positive cache — fetch full TA record
       const rows = await sbSelect<TABusinessRow>(
@@ -251,21 +278,25 @@ export async function getOrFetchTAData(
     const taApiKey = process.env.TRIPADVISOR_API_KEY;
     if (!taApiKey) return null;
 
-    const taCategory = TA_CATEGORY_MAP[category.toLowerCase()] ?? 'hotels';
+    const searchCategory = taCategory ?? category;
 
     const liveEnrich = async (): Promise<TripadvisorBusinessData | null> => {
-      const taId = await searchTALocation(name, address, taCategory);
+      // Reuse a known location ID rather than paying for a second search.
+      const taId = knownTAId ?? await searchTALocation(name, address, searchCategory);
       if (!taId) {
         saveNegativeMapping(googlePlaceId).catch(() => {}); // non-blocking
         return null;
       }
       const taData = await fetchTALocationDetails(taId);
       if (!taData) {
-        saveNegativeMapping(googlePlaceId).catch(() => {}); // non-blocking
+        // Don't downgrade a known-good mapping to a sentinel over what may be
+        // a transient details failure — the ingestion job will retry it.
+        if (!knownTAId) saveNegativeMapping(googlePlaceId).catch(() => {});
         return null;
       }
-      // Fire-and-forget cache writes — never block returning the TA data
-      saveTAMapping(googlePlaceId, taId, 80).catch(() => {});
+      // Fire-and-forget cache writes — never block returning the TA data.
+      // Confidence is a 0–1 fraction; the column cannot hold a percentage.
+      saveTAMapping(googlePlaceId, taId, 0.8).catch(() => {});
       saveTABusinessData(googlePlaceId, taData).catch(() => {});
       return taData;
     };
@@ -295,7 +326,7 @@ export async function searchTALocation(
   category: string
 ): Promise<string | null> {
   const key = taApiKey();
-  const taCategory = TA_CATEGORY_MAP[category.toLowerCase()] ?? 'restaurants';
+  const taCategory = toTACategory(category);
   const query = encodeURIComponent(`${name} ${address}`);
 
   const url = `${TA_API_BASE}/location/search?searchQuery=${query}&category=${taCategory}&language=en&key=${key}`;
@@ -337,19 +368,35 @@ export async function fetchTALocationDetails(
 }
 
 /**
+ * business_id_mapping.match_confidence is DECIMAL(3,2) — it can only hold
+ * -9.99 to 9.99. Callers have historically passed both 0–1 fractions and 0–100
+ * percentages; a percentage overflowed the column and made the whole insert
+ * fail, which silently disabled the mapping cache. Normalize to a 0–1 fraction.
+ */
+function normalizeConfidence(confidence: number): number {
+  if (!Number.isFinite(confidence)) return 0;
+  const fraction = confidence > 1 ? confidence / 100 : confidence;
+  return Math.min(1, Math.max(0, Math.round(fraction * 100) / 100));
+}
+
+/**
  * Save a business ID mapping (Google place ID → TA location ID) to Supabase.
+ *
+ * Upserts rather than inserts: google_place_id is UNIQUE, so a plain insert
+ * threw for every business we had already seen — including the ones the weekly
+ * refresh job exists to re-fetch, whose TA data was then never written.
  */
 export async function saveTAMapping(
   googlePlaceId: string,
   taLocationId: string,
   confidence: number
 ): Promise<void> {
-  await sbInsert('business_id_mapping', {
+  await sbUpsert('business_id_mapping', {
     google_place_id:   googlePlaceId,
     ta_location_id:    taLocationId,
-    match_confidence:  confidence,
+    match_confidence:  normalizeConfidence(confidence),
     matched_at:        new Date().toISOString(),
-  });
+  }, { onConflict: 'google_place_id' });
 }
 
 /**
