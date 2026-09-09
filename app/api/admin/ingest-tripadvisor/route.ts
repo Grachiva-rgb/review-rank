@@ -50,14 +50,18 @@ interface StaleRow {
 }
 
 /**
- * How long TA data stays fresh before the job re-fetches it.
+ * How long TA data stays fresh before the job re-fetches it. This — not the cron
+ * schedule — is what determines per-business spend: a business is re-fetched at
+ * most once per this window no matter how often the job runs.
  *
- * Deliberately SHORTER than the cron interval. When this equalled the weekly
- * schedule, a row written just after one run was ~6d23h old at the next run,
- * got skipped as fresh, and then waited a further week — refreshing at ~14 days
- * instead of 7. Vercel fires crons within the hour, so which rows fell on which
- * side of the boundary was effectively random. Keep this below the schedule
- * interval so every run reliably catches the previous period's rows.
+ * Must never equal the cron interval. When both were 7 days, a row written just
+ * after one weekly run was ~6d23h old at the next run, was skipped as fresh, and
+ * waited a further week — refreshing at ~14 days instead of 7. Vercel fires crons
+ * within the hour, so which rows fell on which side of the boundary was random.
+ *
+ * The cron now runs daily, which decouples the two concerns: this window governs
+ * freshness and cost, while the daily cadence supplies the throughput to work
+ * through a backlog (one invocation drains ~75 businesses; see TIME_BUDGET_MS).
  */
 const REFRESH_AFTER_MS = 6 * 24 * 60 * 60 * 1000;
 
