@@ -13,7 +13,9 @@
  *   OR
  *   { placeId: string }            — single Place ID
  *   OR
- *   {} (empty)                     — refresh all stale records (fetched_at > 7 days ago)
+ *   {} (empty)                     — refresh stale records (fetched_at older than
+ *                                    REFRESH_AFTER_MS) plus a reserved share of
+ *                                    never-matched businesses
  */
 
 import { NextResponse } from 'next/server';
@@ -47,8 +49,42 @@ interface StaleRow {
   ta_location_id: string | null;
 }
 
-/** How long TA data stays fresh before the job re-fetches it. */
-const REFRESH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * How long TA data stays fresh before the job re-fetches it.
+ *
+ * Deliberately SHORTER than the cron interval. When this equalled the weekly
+ * schedule, a row written just after one run was ~6d23h old at the next run,
+ * got skipped as fresh, and then waited a further week — refreshing at ~14 days
+ * instead of 7. Vercel fires crons within the hour, so which rows fell on which
+ * side of the boundary was effectively random. Keep this below the schedule
+ * interval so every run reliably catches the previous period's rows.
+ */
+const REFRESH_AFTER_MS = 6 * 24 * 60 * 60 * 1000;
+
+/**
+ * Upper bound on businesses selected per run. The real limiter is TIME_BUDGET_MS
+ * below — this just bounds the Supabase query.
+ */
+const MAX_PER_RUN = 150;
+
+/**
+ * Slots held back for never-matched businesses.
+ *
+ * Stale refreshes are added to the target set first, so once there were 50+ of
+ * them they consumed the entire batch and the unmatched-business branch never
+ * ran — new hospitality businesses would never get matched to Tripadvisor at
+ * all. Reserving a floor guarantees the match path always makes progress.
+ */
+const MIN_MATCH_SLOTS = 15;
+
+/**
+ * Stop starting new businesses after this much wall time.
+ *
+ * maxDuration is 60s and each business costs ~250ms of rate-limit sleep plus the
+ * TA round trip, so a large batch cannot finish in one invocation. Ending
+ * cleanly and reporting what's left beats being killed mid-loop.
+ */
+const TIME_BUDGET_MS = 45_000;
 
 /**
  * How long to leave a "not on Tripadvisor" business alone before trying again.
@@ -87,34 +123,45 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (body.placeId) {
     targets.set(body.placeId, null);
   } else if (Array.isArray(body.placeIds) && body.placeIds.length > 0) {
-    for (const id of body.placeIds.slice(0, 50)) targets.set(id, null); // hard cap per batch
+    for (const id of body.placeIds.slice(0, MAX_PER_RUN)) targets.set(id, null);
   } else {
     const staleCutoff = new Date(Date.now() - REFRESH_AFTER_MS).toISOString();
     const retryCutoff = new Date(Date.now() - RETRY_UNMATCHED_AFTER_MS).toISOString();
 
-    // Already matched, data has gone stale → cheap refresh.
+    // Already matched, data has gone stale → cheap refresh (1 TA call, no search).
     const staleTARows = await sbSelect<{ google_place_id: string; ta_location_id: string }>(
       'tripadvisor_businesses',
-      `fetched_at=lt.${encodeURIComponent(staleCutoff)}&select=google_place_id,ta_location_id&limit=50`
+      `fetched_at=lt.${encodeURIComponent(staleCutoff)}` +
+        `&select=google_place_id,ta_location_id&order=fetched_at.asc&limit=${MAX_PER_RUN}`
     ).catch(() => [] as { google_place_id: string; ta_location_id: string }[]);
 
-    for (const row of staleTARows) {
-      if (row.google_place_id) targets.set(row.google_place_id, row.ta_location_id);
-    }
-
-    // Never matched, and not attempted recently → full match path.
+    // Never matched, and not attempted recently → full match path (3 calls).
     const unmatched = await sbSelect<StaleRow>(
       'business_id_mapping',
       `ta_location_id=is.null&or=(matched_at.is.null,matched_at.lt.${encodeURIComponent(retryCutoff)})` +
-        `&select=google_place_id,ta_location_id&order=matched_at.asc.nullsfirst&limit=50`
+        `&select=google_place_id,ta_location_id&order=matched_at.asc.nullsfirst&limit=${MAX_PER_RUN}`
     ).catch(() => [] as StaleRow[]);
 
-    for (const row of unmatched) {
+    const staleRows = staleTARows.filter((r) => r.google_place_id);
+
+    // Divide the batch so neither branch can crowd the other out entirely:
+    // refreshes get whatever is left after reserving a floor for new matches,
+    // and any slots the match path doesn't need fall back to refreshes.
+    const reserved  = Math.min(MIN_MATCH_SLOTS, unmatched.length);
+    const staleTake = Math.min(staleRows.length, MAX_PER_RUN - reserved);
+    const matchTake = Math.min(unmatched.length, MAX_PER_RUN - staleTake);
+
+    // Oldest first, so a backlog drains in a predictable order rather than
+    // re-picking the same rows every run.
+    for (const row of staleRows.slice(0, staleTake)) {
+      targets.set(row.google_place_id, row.ta_location_id);
+    }
+    for (const row of unmatched.slice(0, matchTake)) {
       if (!targets.has(row.google_place_id)) targets.set(row.google_place_id, null);
     }
   }
 
-  const placeIds = Array.from(targets.keys()).slice(0, 50);
+  const placeIds = Array.from(targets.keys()).slice(0, MAX_PER_RUN);
 
   if (placeIds.length === 0) {
     return NextResponse.json({ message: 'Nothing to ingest', ingested: 0 });
@@ -122,8 +169,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Process each place
   const results: Array<{ placeId: string; status: 'ok' | 'skipped' | 'error'; detail?: string }> = [];
+  const startedAt = Date.now();
+  let deferred = 0;
 
-  for (const placeId of placeIds) {
+  for (const [index, placeId] of placeIds.entries()) {
+    // Out of time: stop cleanly. Every business already processed has been
+    // committed individually, so nothing done so far is lost — the remainder
+    // is simply still stale and gets picked up by the next run.
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      deferred = placeIds.length - index;
+      break;
+    }
+
     try {
       // Check freshness before spending anything on this business.
       const existing = await getCachedTAData(placeId).catch(() => null);
@@ -188,5 +245,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   const skipped = results.filter((r) => r.status === 'skipped').length;
   const errors  = results.filter((r) => r.status === 'error').length;
 
-  return NextResponse.json({ ingested: ok, skipped, errors, results });
+  // `deferred` > 0 on consecutive runs means the backlog is growing faster than
+  // one invocation can drain it — raise the cron frequency rather than
+  // MAX_PER_RUN, since the ceiling is wall time, not batch size.
+  return NextResponse.json({
+    ingested: ok,
+    skipped,
+    errors,
+    deferred,
+    selected: placeIds.length,
+    elapsedMs: Date.now() - startedAt,
+    results,
+  });
 }
