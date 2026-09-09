@@ -45,7 +45,11 @@ export async function GET(request: NextRequest) {
   const rawLat = searchParams.get('lat');
   const rawLng = searchParams.get('lng');
 
-  const category = normalizePartnerCategory(rawCategory) ?? rawCategory;
+  // Only ever query with a slug from the canonical taxonomy. This previously
+  // fell back to the raw user string, which put unvalidated input into a
+  // PostgREST filter for no benefit — a category outside the taxonomy cannot
+  // match a partner row anyway.
+  const category = normalizePartnerCategory(rawCategory);
   const lat = rawLat != null ? parseFloat(rawLat) : NaN;
   const lng = rawLng != null ? parseFloat(rawLng) : NaN;
 

@@ -22,6 +22,14 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       capture_pageview: false, // we capture manually below so query strings are included
       capture_pageleave: true,
       autocapture: true,
+      // The lead form collects a name, phone number, and free-text description.
+      // Autocapture already avoids input *values*, but session recording does
+      // not by default — if recording is ever enabled on the project side, this
+      // stops that PII from being shipped to PostHog. Set here rather than in
+      // the dashboard so the guarantee lives in the code.
+      session_recording: {
+        maskAllInputs: true,
+      },
       loaded: (ph) => {
         if (process.env.NODE_ENV === 'development') ph.debug(false);
       },

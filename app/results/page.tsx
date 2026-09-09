@@ -13,6 +13,8 @@ import {
 } from '@/lib/locationIntent';
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
+import { headers } from 'next/headers';
+import { rateLimit, ipFromHeaders } from '@/lib/ratelimit';
 
 interface ResultsPageProps {
   searchParams: Promise<{
@@ -53,6 +55,35 @@ export async function generateMetadata({ searchParams }: ResultsPageProps): Prom
 }
 
 export default async function ResultsPage({ searchParams }: ResultsPageProps) {
+  // Rate limit BEFORE any billed work.
+  //
+  // This page renders dynamically on every request (it reads searchParams), and
+  // each uncached render costs a Google Geocoding call plus a Text Search call.
+  // The Supabase cache is keyed on the query string, so a unique query per
+  // request defeats it. middleware.ts matches /admin only, so nothing else
+  // throttled this path: it was the cheapest unauthenticated way to spend money
+  // in this codebase, and unlike /api/places it had no limiter at all.
+  //
+  // Note what this does and does not do: the limiter is per-instance (see
+  // lib/ratelimit.ts), so this raises the cost of an attack without bounding it.
+  // The control that actually bounds spend is a Google Cloud quota + budget cap.
+  const requestHeaders = await headers();
+  const { allowed } = rateLimit(`results:${ipFromHeaders(requestHeaders)}`, 20, 60_000);
+  if (!allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-zinc-400 mb-4">
+            Too many searches from your connection. Please wait a moment and try again.
+          </p>
+          <Link href="/" className="text-amber-400 hover:text-amber-300 text-sm">
+            ← Start a new search
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const params = await searchParams;
   const query = params.q || '';
   const location = (params.location || '').slice(0, MAX_LABEL_LENGTH);

@@ -23,9 +23,15 @@ const config: CapacitorConfig = {
   server: {
     url: serverUrl,
     cleartext: false,      // HTTPS only in production
+    // Kept deliberately narrow. '*.vercel.app' used to be listed here, which
+    // let the WebView navigate to ANY Vercel-hosted site — a shared wildcard
+    // domain that anyone can get a subdomain on. A link or redirect to an
+    // attacker's *.vercel.app project would have opened inside the app's own
+    // WebView, wearing the app's chrome and origin trust.
     allowNavigation: [
+      'reviewrank.app',
+      'www.reviewrank.app',
       'review-rank.vercel.app',
-      '*.vercel.app',
       'maps.googleapis.com',
       'lh3.googleusercontent.com',
     ],

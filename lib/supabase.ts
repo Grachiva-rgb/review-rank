@@ -87,6 +87,28 @@ export async function sbUpsert<T extends object>(
   }
 }
 
+/**
+ * Delete rows matching `query`.
+ *
+ * `query` is REQUIRED and must be non-empty. PostgREST happily deletes every
+ * row in a table when handed no filter, so an empty query is treated as a
+ * programming error rather than passed through.
+ */
+export async function sbDelete(table: string, query: string): Promise<void> {
+  if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL not set');
+  if (!query.trim()) {
+    throw new Error(`sbDelete ${table}: refusing to delete with an empty filter`);
+  }
+  const res = await fetch(`${url}/rest/v1/${table}?${query}`, {
+    method: 'DELETE',
+    headers: headers({ Prefer: 'return=minimal' }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase delete ${table} failed: ${res.status} ${detail}`);
+  }
+}
+
 export async function sbUpdate<T extends object>(
   table: string,
   query: string,

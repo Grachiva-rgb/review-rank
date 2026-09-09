@@ -6,8 +6,14 @@ node_modules/
 out/
 
 # Environment files — NEVER commit these; they contain secrets
+#
+# .env.production was tracked. Its secret values happened to be empty in every
+# revision, so nothing leaked, but a tracked file named .env.production is a
+# trap: the next person to fill it in commits a live key without noticing.
+# Real values belong in the Vercel dashboard, not in the repo.
 .env
 .env.local
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { secretMatches } from '@/lib/timingSafe';
 
 /**
  * Admin authentication via HTTP Basic Auth.
@@ -28,7 +29,8 @@ function handleAdminAuth(request: NextRequest): NextResponse | null {
       const decoded = atob(encoded); // Web API — available in Next.js Edge Runtime
       const colonIdx = decoded.indexOf(':');
       const password = colonIdx >= 0 ? decoded.slice(colonIdx + 1) : decoded;
-      if (password === adminSecret) return null; // authenticated — allow through
+      // Constant-time compare: `===` exits on the first differing byte.
+      if (secretMatches(password, adminSecret)) return null; // authenticated
     } catch {
       // malformed base64 — fall through to 401
     }

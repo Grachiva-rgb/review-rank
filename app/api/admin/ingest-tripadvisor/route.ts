@@ -27,7 +27,8 @@ import {
   saveTABusinessData,
   getCachedTAData,
 } from '@/lib/tripadvisor';
-import { sbSelect, isSupabaseConfigured } from '@/lib/supabase';
+import { sbSelect, sbDelete, isSupabaseConfigured } from '@/lib/supabase';
+import { secretMatches } from '@/lib/timingSafe';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -38,9 +39,10 @@ function unauthorized() {
 
 function isAuthorized(request: Request): boolean {
   const bearer = request.headers.get('authorization')?.replace('Bearer ', '').trim();
-  // Accept ADMIN_SECRET (manual calls) or CRON_SECRET (Vercel cron scheduler)
-  if (process.env.ADMIN_SECRET && bearer === process.env.ADMIN_SECRET) return true;
-  if (process.env.CRON_SECRET && bearer === process.env.CRON_SECRET) return true;
+  // Accept ADMIN_SECRET (manual calls) or CRON_SECRET (Vercel cron scheduler).
+  // Constant-time compare; both fail closed when the env var is unset.
+  if (secretMatches(bearer, process.env.ADMIN_SECRET)) return true;
+  if (secretMatches(bearer, process.env.CRON_SECRET)) return true;
   return false;
 }
 
@@ -99,6 +101,53 @@ const TIME_BUDGET_MS = 45_000;
  */
 const RETRY_UNMATCHED_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * Retention for `search_cache` rows, by cache family.
+ *
+ * Every cache reader filters on `created_at >= cutoff`, so an expired row is
+ * merely ignored — it is never deleted. Nothing in the app pruned this table, so
+ * it grew permanently: every unique search query, place ID, and autocomplete
+ * prefix ever seen left a row behind forever. That is both a storage bill and a
+ * lever for anyone flooding unique queries.
+ *
+ * Retention is set per family from the longest TTL that reads it, plus headroom:
+ *   - `autocomplete2:` reads at 30 days  -> keep 31 days
+ *   - `search:` reads at 20 h (SEO path) and `place_details:` at 6 h -> keep 2 days
+ *
+ * Legacy `autocomplete:` rows from before the Places API (New) migration fall
+ * into the second bucket and get cleared out, which is the intent.
+ */
+const AUTOCOMPLETE_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
+const SHORT_LIVED_RETENTION_MS  = 2 * 24 * 60 * 60 * 1000;
+
+/** PostgREST `like` pattern; `*` is the wildcard. */
+const AUTOCOMPLETE_PATTERN = 'autocomplete2:*';
+
+/**
+ * Delete `search_cache` rows past their retention. Non-fatal: a prune failure
+ * must never stop the ingestion run it is piggybacking on.
+ */
+async function pruneSearchCache(): Promise<{ pruned: boolean; error?: string }> {
+  const pattern = encodeURIComponent(AUTOCOMPLETE_PATTERN);
+  const autocompleteCutoff = new Date(Date.now() - AUTOCOMPLETE_RETENTION_MS).toISOString();
+  const shortLivedCutoff   = new Date(Date.now() - SHORT_LIVED_RETENTION_MS).toISOString();
+
+  try {
+    await sbDelete(
+      'search_cache',
+      `cache_key=like.${pattern}&created_at=lt.${encodeURIComponent(autocompleteCutoff)}`
+    );
+    await sbDelete(
+      'search_cache',
+      `cache_key=not.like.${pattern}&created_at=lt.${encodeURIComponent(shortLivedCutoff)}`
+    );
+    return { pruned: true };
+  } catch (err) {
+    console.error('[ingest-tripadvisor] search_cache prune failed:', err);
+    return { pruned: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // Also expose as GET so Vercel Cron can invoke it (crons use GET by default)
 export async function GET(request: Request): Promise<NextResponse> {
   return POST(request);
@@ -113,6 +162,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
+
+  // Housekeeping first: cheap, unrelated to the TA budget, and it must still run
+  // on days when there is nothing to ingest.
+  const prune = await pruneSearchCache();
 
   const body = await request.json().catch(() => ({})) as {
     placeId?: string;
@@ -168,7 +221,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   const placeIds = Array.from(targets.keys()).slice(0, MAX_PER_RUN);
 
   if (placeIds.length === 0) {
-    return NextResponse.json({ message: 'Nothing to ingest', ingested: 0 });
+    return NextResponse.json({
+      message: 'Nothing to ingest',
+      ingested: 0,
+      cachePruned: prune.pruned,
+    });
   }
 
   // Process each place
@@ -258,6 +315,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     errors,
     deferred,
     selected: placeIds.length,
+    cachePruned: prune.pruned,
     elapsedMs: Date.now() - startedAt,
     results,
   });

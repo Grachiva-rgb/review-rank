@@ -11,6 +11,50 @@ const MAX_NAME  = 120;
 const MAX_PHONE = 30;
 const MAX_DESC  = 600;
 
+const DEL = 0x7f;
+const MAX_CONTROL = 0x1f;
+const TAB = 0x09;
+const LF = 0x0a;
+const CR = 0x0d;
+
+function isControl(code: number): boolean {
+  return code <= MAX_CONTROL || code === DEL;
+}
+
+/**
+ * Replace every control character with a space.
+ *
+ * For values that reach an email header: contact_name is interpolated into the
+ * Resend `subject` in lib/leadDelivery.ts, and a CR/LF inside a header value is
+ * the classic header-injection primitive. Resend's JSON API most likely rejects
+ * or escapes this itself, but that guarantee should not live in a third party's
+ * parser.
+ *
+ * Written against code points rather than a regex character class so the source
+ * contains no escape sequences that a future edit could silently corrupt.
+ */
+function stripControl(s: string): string {
+  let out = '';
+  for (const ch of s) {
+    out += isControl(ch.codePointAt(0) ?? 0) ? ' ' : ch;
+  }
+  return out;
+}
+
+/**
+ * Drop control characters but keep tabs and line breaks — for free-text that
+ * only lands in an HTML body (already escaped by leadHtml) or the admin UI,
+ * where the user's line breaks are meaningful and harmless.
+ */
+function stripControlKeepBreaks(s: string): string {
+  let out = '';
+  for (const ch of s) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code === TAB || code === LF || code === CR || !isControl(code)) out += ch;
+  }
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   const { allowed } = rateLimit(`lead-request:${clientIp(request)}`, 5, 3_600_000);
   if (!allowed) {
@@ -53,10 +97,10 @@ export async function POST(request: NextRequest) {
 
   // Sanitize + length-cap
   const sanitized = {
-    contact_name:      contact_name.trim().slice(0, MAX_NAME),
-    contact_phone:     contact_phone.trim().slice(0, MAX_PHONE),
-    description:       description.trim().slice(0, MAX_DESC),
-    business_name:     business_name.trim().slice(0, MAX_NAME),
+    contact_name:      stripControl(contact_name).trim().slice(0, MAX_NAME),
+    contact_phone:     stripControl(contact_phone).trim().slice(0, MAX_PHONE),
+    description:       stripControlKeepBreaks(description).trim().slice(0, MAX_DESC),
+    business_name:     stripControl(business_name).trim().slice(0, MAX_NAME),
     business_place_id: (typeof business_place_id === 'string' && PLACE_ID_RE.test(business_place_id.trim()))
                          ? business_place_id.trim()
                          : null,
