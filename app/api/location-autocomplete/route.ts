@@ -91,6 +91,21 @@ export async function GET(req: NextRequest) {
     if (!res.ok) return NextResponse.json([]);
 
     const data = await res.json();
+
+    // This legacy endpoint reports failures as HTTP 200 with a status field, so
+    // checking res.ok alone makes a misconfigured key or a disabled API look
+    // identical to "no matches". Surface it, and never cache it — a cached
+    // failure would suppress suggestions for the whole TTL.
+    const status = data.status as string | undefined;
+    if (status !== 'OK' && status !== 'ZERO_RESULTS') {
+      console.error(
+        `[location-autocomplete] Places Autocomplete returned ${status ?? 'no status'}` +
+          `${data.error_message ? `: ${data.error_message}` : ''}. ` +
+          'This endpoint needs the legacy Places API enabled on the key.'
+      );
+      return NextResponse.json([]);
+    }
+
     const suggestions: Suggestion[] = (data.predictions ?? []).map(
       (p: { description: string; place_id: string }) => ({
         label: p.description.replace(/, USA$/, ''),
@@ -98,7 +113,7 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    // Cache empty results too — a prefix with no matches won't gain any.
+    // A genuine ZERO_RESULTS is worth caching — that prefix won't gain matches.
     writeCache(q, suggestions);
 
     return NextResponse.json(suggestions, {
