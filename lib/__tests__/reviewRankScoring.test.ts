@@ -91,9 +91,11 @@ describe('boundary: ratings (100 reviews, no sample)', () => {
     expect(score(rating as number, 100).finalScore).toBeCloseTo(expected as number, 5);
   });
 
-  it('bayesian maps 3.0★→0 and 5.0★→100 after shrinkage toward the 4.2 prior', () => {
-    expect(bayesianRating(4.2, 0)).toBeCloseTo(4.2, 10); // no reviews → pure prior
-    expect(bayesianRating(5.0, 1_000_000)).toBeCloseTo(5.0, 3);
+  it('bayesian returns the 0–100 mapping (3.0★→0, 5.0★→100) after shrinkage toward the 4.2 prior', () => {
+    // bayesianRating returns the mapped 0–100 score, not the raw 1–5 blend.
+    expect(bayesianRating(4.2, 0)).toBeCloseTo(60.0, 10); // pure prior: (4.2−3)/2×100
+    expect(bayesianRating(5.0, 1_000_000)).toBeCloseTo(100, 2); // prior influence vanishes
+    expect(bayesianRating(3.0, 1_000_000)).toBeCloseTo(0, 2);
   });
 });
 
