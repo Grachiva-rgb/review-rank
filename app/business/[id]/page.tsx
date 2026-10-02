@@ -17,10 +17,12 @@ import {
   getBusinessInsights,
 } from '@/lib/ranking';
 
-// Revalidate every hour — business details (ratings, reviews) don't change meaningfully faster.
-// This ensures most page loads are served from CDN cache rather than triggering a fresh
-// Place Details API call on every request.
-export const revalidate = 3600;
+// Revalidate daily — business details (ratings, reviews) don't change meaningfully
+// faster, and every regeneration past the Supabase cache window is a billed Place
+// Details call at the top (Enterprise + Atmosphere) tier because the page shows
+// review text. Hourly ISR let crawler traffic regenerate thousands of business
+// pages a day; daily serves the same content from the CDN instead.
+export const revalidate = 86400;
 
 interface BusinessPageProps {
   params: Promise<{ id: string }>;

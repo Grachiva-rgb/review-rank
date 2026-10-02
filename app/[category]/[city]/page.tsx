@@ -9,8 +9,11 @@ import BusinessCard from '@/components/BusinessCard';
 import CompareBar from '@/components/CompareBar';
 import NearMeSearch from '@/components/NearMeSearch';
 
-// Revalidate each page once per day (ISR)
-export const revalidate = 86400;
+// Revalidate each page once per week (ISR). Local-business rankings don't move
+// meaningfully day to day, and each refresh of these 260 pages is a billed Text
+// Search Enterprise call ($35/1k, 1k free/month): daily was ~7,900 calls/month
+// (~$240); weekly is ~1,100 (~$4).
+export const revalidate = 604800;
 
 interface PageProps {
   params: Promise<{ category: string; city: string }>;
@@ -55,9 +58,9 @@ export default async function CategoryCityPage({ params }: PageProps) {
   let fetchError = false;
 
   try {
-    // Accept results up to 20 h old. There are 260 of these pages and each one
-    // costs a Text Search call to build, so a redeploy inside the window is
-    // free; the daily ISR pass past the window still refreshes the rankings.
+    // Accept results up to ~6.5 days old. There are 260 of these pages and each
+    // one costs a Text Search call to build, so a redeploy inside the window is
+    // free; the weekly ISR pass past the window still refreshes the rankings.
     places = await searchPlaces(`${cat.searchQuery} in ${city.searchName}`, {
       cacheTtlMs: SEO_SEARCH_CACHE_TTL_MS,
     });

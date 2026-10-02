@@ -70,19 +70,26 @@ interface SearchOptions {
 
 // ─── Search result cache (Supabase) ──────────────────────────────────────────
 
-/** Default freshness window, used for interactive user searches. */
-const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+/**
+ * Default freshness window, used for interactive user searches.
+ *
+ * Ratings and review counts move slowly, so a repeated query inside a day is
+ * the same ranking — but at 30 minutes the same popular query ("plumbers in
+ * cleveland") was re-bought dozens of times a day at the Text Search
+ * Enterprise rate ($35/1k). A day-old result is indistinguishable to the user.
+ */
+const SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Freshness window for the pre-generated /[category]/[city] pages.
  *
- * Those pages are ISR'd once every 24 h, which is the freshness guarantee we
+ * Those pages are ISR'd once every 7 days, which is the freshness guarantee we
  * actually make for them — so anything shorter than that only causes the same
  * 260 Text Search calls to be re-bought on every deploy, since a build always
- * missed the 30-minute window. Sitting just under the revalidate period means a
- * redeploy is free while the daily refresh still hits Google exactly once.
+ * missed the shorter window. Sitting just under the revalidate period means a
+ * redeploy is free while the weekly refresh still hits Google exactly once.
  */
-export const SEO_SEARCH_CACHE_TTL_MS = 20 * 60 * 60 * 1000; // 20 hours
+export const SEO_SEARCH_CACHE_TTL_MS = 6.5 * 24 * 60 * 60 * 1000; // ~6.5 days
 
 /**
  * Build a stable cache key from the search query and optional location bias.
@@ -298,7 +305,14 @@ export function categorizePlace(name: string, primaryType?: string) {
 
 // ─── Place Details cache (Supabase) ──────────────────────────────────────────
 
-const PLACE_DETAILS_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+/**
+ * Place Details requests the `reviews` field, which bills at the most expensive
+ * (Enterprise + Atmosphere) tier — and with ~2,600 crawlable business pages, a
+ * 6-hour window let bot traffic re-buy each page up to 4x/day. Google permits
+ * caching place data for up to 30 days; 14 keeps ratings/reviews fresh enough
+ * for a detail page while capping spend at ~2 calls/business/month worst case.
+ */
+const PLACE_DETAILS_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 function buildPlaceDetailsCacheKey(placeId: string): string {
   return `place_details:${placeId}`;
