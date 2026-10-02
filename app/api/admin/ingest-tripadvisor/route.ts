@@ -111,18 +111,19 @@ const RETRY_UNMATCHED_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
  * lever for anyone flooding unique queries.
  *
  * Retention is set per family from the longest TTL that reads it, plus headroom:
- *   - `autocomplete2:` reads at 30 days  -> keep 31 days
+ *   - `autocomplete3:` reads at 30 days  -> keep 31 days
  *   - `search:` reads at ~6.5 days (SEO path) and `place_details:` at 14 days
  *     -> keep 15 days
  *
- * Legacy `autocomplete:` rows from before the Places API (New) migration fall
- * into the second bucket and get cleared out, which is the intent.
+ * Superseded prefixes (`autocomplete:` from the legacy API, `autocomplete2:`
+ * with street-address entries for zip inputs) fall into the second bucket and
+ * get cleared out, which is the intent.
  */
 const AUTOCOMPLETE_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 const SHORT_LIVED_RETENTION_MS  = 15 * 24 * 60 * 60 * 1000;
 
 /** PostgREST `like` pattern; `*` is the wildcard. */
-const AUTOCOMPLETE_PATTERN = 'autocomplete2:*';
+const AUTOCOMPLETE_PATTERN = 'autocomplete3:*';
 
 /**
  * Delete `search_cache` rows past their retention. Non-fatal: a prune failure
