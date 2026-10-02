@@ -76,6 +76,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="bg-[#FAF7F0] text-[#241C15] antialiased min-h-screen">
         <PostHogProvider>{children}</PostHogProvider>
+        {/* Global legal footer — Privacy Policy and Terms must be publicly
+            accessible from every page (Google Maps Platform requirement,
+            and general practice for a site collecting lead PII). */}
+        <footer className="border-t border-[#EDE8E3] py-4 px-4 text-center">
+          <p className="text-[11px] text-[#9A8C85]">
+            <a href="/privacy" className="hover:text-[#8B5E3C] underline-offset-2 hover:underline">Privacy Policy</a>
+            <span className="mx-2">·</span>
+            <a href="/terms" className="hover:text-[#8B5E3C] underline-offset-2 hover:underline">Terms of Use</a>
+            <span className="mx-2">·</span>
+            <a href="/methodology" className="hover:text-[#8B5E3C] underline-offset-2 hover:underline">Methodology</a>
+          </p>
+        </footer>
         {/* Cloudflare Web Analytics — free, cookieless second traffic source
             that also counts visitors whose browsers block client-side
             analytics scripts aimed at known trackers. Renders only when

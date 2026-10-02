@@ -483,6 +483,11 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     publishTime?: string;
     relativePublishTimeDescription?: string;
     authorAttribution?: { displayName?: string; uri?: string; photoUri?: string };
+    // Google policy: end users "must always have access to view the individual
+    // ... review on Google Maps using the provided googleMapsUri", and the
+    // flagContentUri powers the recommended report-review link.
+    googleMapsUri?: string;
+    flagContentUri?: string;
   };
 
   const rawReviews = (p.reviews as RawReview[]) || [];
@@ -493,6 +498,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     rating: r.rating ?? 0,
     relative_time_description: r.relativePublishTimeDescription ?? '',
     text: r.text?.text ?? '',
+    google_maps_uri: r.googleMapsUri,
+    flag_content_uri: r.flagContentUri,
   }));
 
   const rrs = calculateReviewRankScore({

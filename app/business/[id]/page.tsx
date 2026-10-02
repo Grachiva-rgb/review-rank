@@ -9,6 +9,7 @@ import NavLogo from '@/components/NavLogo';
 import ClientTracker from '@/components/ClientTracker';
 import SaveButton from '@/components/SaveButton';
 import TripadvisorPanel from '@/components/TripadvisorPanel';
+import GoogleMapsAttribution from '@/components/GoogleMapsAttribution';
 import {
   detectCategory,
   getTrustTierFromRRS,
@@ -209,6 +210,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
                   ({place.user_ratings_total.toLocaleString()} reviews)
                 </span>
                 <PriceLevel level={place.price_level} />
+                <GoogleMapsAttribution />
               </div>
 
               {place.opening_hours && (
@@ -437,10 +439,21 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
             <TripadvisorPanel ta={place.ta_data} multiScore={place.multi_source_score} />
           )}
 
-          {/* Reviews */}
+          {/* Reviews — display requirements per Google Places policy: author
+              avatar (stated minimum) + name/profile link where space allows,
+              access to the source review on Google Maps via googleMapsUri,
+              a report link via flagContentUri, and a visible notice that the
+              sample is relevance-ordered. */}
           {place.reviews && place.reviews.length > 0 ? (
             <div>
-              <h2 className="font-display text-2xl text-[#241C15] mb-5">Customer Reviews</h2>
+              <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+                <h2 className="font-display text-2xl text-[#241C15]">Customer Reviews</h2>
+                <GoogleMapsAttribution />
+              </div>
+              <p className="text-xs text-[#9A8C85] mb-5 leading-relaxed">
+                Google selects and orders this review sample by relevance. It is
+                not a chronological review history.
+              </p>
               <div className="space-y-4">
                 {place.reviews.slice(0, 5).map((review, index) => (
                   <div
@@ -448,9 +461,34 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
                     className="rounded-2xl border border-[#EDE8E3] bg-white p-5 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <span className="text-sm font-medium text-[#241C15]">{review.author_name}</span>
-                        <span className="text-xs text-[#7A6B63] ml-2">{review.relative_time_description}</span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {review.profile_photo_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={review.profile_photo_url}
+                            alt=""
+                            width={32}
+                            height={32}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="h-8 w-8 rounded-full flex-shrink-0 bg-[#F2EDE7]"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          {safeUrl(review.author_url) ? (
+                            <a
+                              href={review.author_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-[#241C15] hover:text-[#8B5E3C] transition-colors"
+                            >
+                              {review.author_name}
+                            </a>
+                          ) : (
+                            <span className="text-sm font-medium text-[#241C15]">{review.author_name}</span>
+                          )}
+                          <span className="text-xs text-[#7A6B63] ml-2">{review.relative_time_description}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <StarRating rating={review.rating} size="sm" />
@@ -461,6 +499,30 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
                     <p className="text-sm text-[#5A4A3F] leading-relaxed line-clamp-4">
                       {review.text}
                     </p>
+                    {(safeUrl(review.google_maps_uri) || safeUrl(review.flag_content_uri)) && (
+                      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-[#F2EDE7]">
+                        {safeUrl(review.google_maps_uri) && (
+                          <a
+                            href={review.google_maps_uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#8B5E3C] hover:text-[#6B4A2F] transition-colors"
+                          >
+                            View on Google Maps ↗
+                          </a>
+                        )}
+                        {safeUrl(review.flag_content_uri) && (
+                          <a
+                            href={review.flag_content_uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#9A8C85] hover:text-[#7A6B63] transition-colors"
+                          >
+                            Report review
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
