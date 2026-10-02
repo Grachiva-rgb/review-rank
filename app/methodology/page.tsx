@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import ClientTracker from '@/components/ClientTracker';
 
 export const metadata: Metadata = {
-  title: 'Methodology — How Review Rank Scores Work | ReviewRank',
+  // The root layout's title template appends "| ReviewRank".
+  title: 'Methodology — How Review Rank Scores Work',
   description:
     'A transparent breakdown of the Review Rank Score: Bayesian-adjusted rating, review volume, recent sentiment, and rating consistency. No paid placements.',
 };
