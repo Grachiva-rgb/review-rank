@@ -83,10 +83,12 @@ export interface Place {
     sentiment: number;
     consistency: number;
   };
-  /** Proxy trend derived from recent-review sentiment vs bayesian rating. */
+  /** Proxy trend derived from sampled-review sentiment vs bayesian rating. */
   trend_signal?: TrendSignal;
   /** Human-readable label for trend_signal. */
   trend_label?: string;
+  /** Evidence-confidence label (Very High/High/Moderate/Low) — see lib/scoreBands. */
+  confidence?: string;
   /** Tripadvisor data when available from the background cache. */
   ta_data?: TripadvisorBusinessData;
   /** Multi-source score blending Google + Tripadvisor when ta_data is present. */
@@ -140,6 +142,8 @@ export interface PlaceDetail {
   };
   trend_signal?: TrendSignal;
   trend_label?: string;
+  /** Evidence-confidence label (Very High/High/Moderate/Low) — see lib/scoreBands. */
+  confidence?: string;
   ta_data?: TripadvisorBusinessData;
   multi_source_score?: MultiSourceScore;
 }

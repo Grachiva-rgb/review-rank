@@ -2,6 +2,7 @@ import { Place, PlaceDetail, NormalizedBusiness } from './types';
 import { calculateSmartScore, MIN_DISPLAY_RATING, detectCategory } from './ranking';
 import { calculateReviewRankScore, BusinessReview, computeTrendSignal, getTrendLabel } from './reviewRankScoring';
 import { getCachedTAEnrichment } from './tripadvisor';
+import { getConfidence } from './scoreBands';
 import { computeMultiSourceScore } from './multiSourceScoring';
 import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
 
@@ -139,6 +140,46 @@ async function setCachedSearch(cacheKey: string, results: Place[]): Promise<void
   }
 }
 
+/**
+ * Batch-read cached review samples for a set of place IDs from the Supabase
+ * place-details cache (one query, zero Google cost).
+ *
+ * Why: the search field mask deliberately excludes reviews (requesting them
+ * bills every Text Search at the top tier), so list pages scored with empty
+ * samples while detail pages scored with up to 5 — the same business showed
+ * different scores on its card vs its own page. Reusing samples the detail
+ * path already paid for closes that gap for every business with cached
+ * details, at the price of a single batched cache read.
+ *
+ * Freshness follows PLACE_DETAILS_CACHE_TTL_MS so a card never scores with a
+ * sample the detail page itself would refuse. Failure or timeout returns an
+ * empty map — scoring falls back to the no-sample priors, exactly as before.
+ */
+async function getCachedSampleRatings(
+  placeIds: string[]
+): Promise<Map<string, BusinessReview[]>> {
+  const out = new Map<string, BusinessReview[]>();
+  if (!isSupabaseConfigured() || placeIds.length === 0) return out;
+  try {
+    const cutoff = new Date(Date.now() - PLACE_DETAILS_CACHE_TTL_MS).toISOString();
+    const keyList = placeIds.map((id) => `"place_details:${id}"`).join(',');
+    const fetchPromise = sbSelect<{ cache_key: string; results: { reviews?: RawPlacesReview[] } }>(
+      'search_cache',
+      `cache_key=in.(${encodeURIComponent(keyList)})` +
+        `&created_at=gte.${encodeURIComponent(cutoff)}&select=cache_key,results`
+    ).catch(() => []);
+    const timeout = new Promise<never[]>((resolve) => setTimeout(() => resolve([]), 1500));
+    const rows = await Promise.race([fetchPromise, timeout]);
+    for (const row of rows) {
+      const pid = row.cache_key.replace('place_details:', '');
+      out.set(pid, toBusinessReviews(row.results?.reviews));
+    }
+  } catch {
+    // non-fatal — cards score from priors as before
+  }
+  return out;
+}
+
 export async function searchPlaces(query: string, options?: SearchOptions): Promise<Place[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -201,16 +242,25 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
 
   const data = await response.json() as { places?: Record<string, unknown>[] };
 
-  const result = (data.places || []).filter((p) => {
+  const displayable = (data.places || []).filter((p) => {
     const r = (p.rating as number) || 0;
     return r >= MIN_DISPLAY_RATING;
-  }).map((p) => {
+  });
+
+  // Enrich list scoring with review samples the detail path already cached —
+  // see getCachedSampleRatings. The search field mask itself still excludes
+  // reviews (billing tier), so p.reviews below is always undefined.
+  const cachedSamples = await getCachedSampleRatings(
+    displayable.map((p) => p.id as string)
+  );
+
+  const result = displayable.map((p) => {
     const displayName = p.displayName as { text?: string } | undefined;
     const location = p.location as { latitude?: number; longitude?: number } | undefined;
     const openingHours = p.currentOpeningHours as { openNow?: boolean } | undefined;
     const rating = (p.rating as number) || 0;
     const reviewCount = (p.userRatingCount as number) || 0;
-    const reviews = toBusinessReviews(p.reviews as RawPlacesReview[] | undefined);
+    const reviews = cachedSamples.get(p.id as string) ?? [];
 
     const rrs = calculateReviewRankScore({
       businessId: p.id as string,
@@ -247,6 +297,7 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
       score_components: rrs.componentScores,
       trend_signal: trendSignal,
       trend_label: getTrendLabel(trendSignal),
+      confidence: getConfidence(reviewCount, reviews.length).label,
     };
   });
 
@@ -512,6 +563,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     score_components: rrs.componentScores,
     trend_signal: trendSignal,
     trend_label: getTrendLabel(trendSignal),
+    confidence: getConfidence(reviewCount, rawReviews.length).label,
     ta_data: taData ?? undefined,
     multi_source_score: multiSourceScore,
   };

@@ -170,6 +170,14 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
       {/* Score + actions */}
       <div className="flex-shrink-0 self-start flex flex-col items-center gap-2 pt-0.5">
         <SmartScoreBadge score={place.review_rank_score} />
+        {place.confidence && (
+          <span
+            className="text-[9px] uppercase tracking-widest text-[#9A8C85]"
+            title="How much review evidence backs this score — it never changes the score itself"
+          >
+            Confidence: {place.confidence}
+          </span>
+        )}
         {place.trend_signal && place.trend_signal !== 'insufficient_data' && (
           <TrendBadge signal={place.trend_signal} label={place.trend_label ?? ''} />
         )}

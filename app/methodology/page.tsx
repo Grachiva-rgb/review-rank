@@ -118,7 +118,7 @@ export default function MethodologyPage() {
         {/* Hero */}
         <div className="mb-12">
           <div className="text-xs text-[#8B5E3C] uppercase tracking-widest font-mono mb-3">
-            Methodology · v1.1
+            Methodology · v1.2
           </div>
           <h1 className="font-display text-4xl sm:text-5xl text-[#241C15] leading-tight mb-4">
             How ReviewRank Scores work
@@ -160,7 +160,7 @@ export default function MethodologyPage() {
             <ComponentRow
               weight="10%"
               name="Rating consistency"
-              description="Population standard deviation of the sampled review ratings, scored as (1 − min(stddev / 1.5, 1)) × 100 — stddev 0 scores 100, stddev ≥ 1.5 scores 0. With fewer than 2 rated reviews this component defaults to 75."
+              description="Population standard deviation of the sampled review ratings, scored as (1 − min(stddev / 1.5, 1)) × 100, then multiplied by a direction factor clamp(sampleMean − 3.0, 0, 1) — so uniformity only earns credit when the sample is actually good (v1.2: a uniformly bad 1★ sample previously scored as 'consistent'). With fewer than 2 rated reviews this component defaults to 75."
             />
           </div>
 
@@ -169,12 +169,14 @@ export default function MethodologyPage() {
             consistency come from a sample of at most 5 reviews, they are
             blended toward priors in proportion to how much of the business the
             sample actually covers: <span className="font-mono text-xs">weight
-            = min(1, √(sampleSize / totalReviews))</span>. The sentiment prior
-            is the overall rating mapped to the same 0–100 scale; the
+            = min(0.5, √(sampleSize / totalReviews))</span>. The sentiment
+            prior is the overall rating mapped to the same 0–100 scale; the
             consistency prior is 75. For a 412-review business the sample
             weight is ≈ {exEvidence.toFixed(2)}, so the sampled signals
-            contribute lightly; for a business with ≤ 5 reviews the sample is
-            the whole population and the weight is 1.
+            contribute lightly. The 0.5 cap (v1.2) means that even for a
+            business whose sample covers every review it has, the
+            relevance-selected sample never outweighs the priors — this bounds
+            how far one unlucky sampled review can ever move a score.
           </p>
           <p>
             The weighted composite is clamped to 0–100 and rounded to one
@@ -313,6 +315,34 @@ export default function MethodologyPage() {
           </ul>
         </Section>
 
+        {/* Confidence */}
+        <Section kicker="Evidence, separately" title="The Confidence indicator">
+          <p>
+            Next to every score we show a <strong>Confidence</strong> level —
+            how much review evidence backs that score. It never changes the
+            score itself; it tells you how seriously to take it. Thresholds
+            come from the review-count distribution of businesses we actually
+            evaluate:
+          </p>
+          <ul className="list-none space-y-2 mt-3">
+            {[
+              'Very High — 300+ reviews and a full 5-review sample.',
+              'High — 100 to 299 reviews.',
+              'Moderate — 25 to 99 reviews.',
+              'Low — fewer than 25 reviews. A 90-point score here is a promising early signal, not an established fact.',
+            ].map((item, i) => (
+              <li key={i} className="flex gap-2 text-sm text-[#5A4A3F] leading-relaxed">
+                <span className="text-[#B8A89F] flex-shrink-0 mt-1">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3">
+            Rating-stability inputs will join this indicator once we have our
+            own longitudinal data.
+          </p>
+        </Section>
+
         {/* What we don't measure */}
         <Section kicker="Transparency" title="What we don't measure (yet)">
           <p>
@@ -361,6 +391,24 @@ export default function MethodologyPage() {
         {/* Update log */}
         <Section kicker="Change log" title="Methodology updates">
           <div className="rounded-2xl border border-[#EDE8E3] bg-white divide-y divide-[#EDE8E3] shadow-sm">
+            <div className="p-4">
+              <div className="font-mono text-xs text-[#8B5E3C] uppercase tracking-widest mb-1">
+                v1.2 — 2026-10-02
+              </div>
+              <p className="text-sm text-[#241C15] font-medium mb-1">
+                Sample-evidence cap, direction-aware consistency, Confidence indicator
+              </p>
+              <p className="text-xs text-[#7A6B63] leading-relaxed">
+                Validated against 4,557 real businesses before shipping: the
+                sample-evidence weight is now capped at 0.5 (halves the
+                worst-case impact of one unlucky sampled review on small
+                businesses), consistency credit now requires the sample to
+                actually be good (a uniformly bad sample no longer outscores a
+                mostly-great one), and every score now carries a separate
+                Confidence level. No list-page ranking changed; 0.9% of
+                businesses changed band label.
+              </p>
+            </div>
             <div className="p-4">
               <div className="font-mono text-xs text-[#8B5E3C] uppercase tracking-widest mb-1">
                 v1.1 — 2026-10-02
