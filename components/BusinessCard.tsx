@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Place } from '@/lib/types';
 import { BusinessCategory, getTrustTierFromRRS, getTrustTierLabel, getTrustTierStyle, getRankingExplanation } from '@/lib/ranking';
+import { isRisingStar } from '@/lib/scoreBands';
 import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
 import QuoteButton from './QuoteButton';
