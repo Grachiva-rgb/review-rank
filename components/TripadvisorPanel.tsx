@@ -105,7 +105,7 @@ export default function TripadvisorPanel({ ta, multiScore }: Props) {
 
       {/* Trust disclosure */}
       <p className="text-[10px] text-[#B8A89F] mt-3 border-t border-[#EDE8E3] pt-2.5 leading-relaxed">
-        Tripadvisor is one of multiple reputation signals used by Review Rank. Scores are not reproduced from Tripadvisor's ranking algorithm. No paid placements.
+        Tripadvisor data is shown for cross-platform comparison and does not affect the ReviewRank Score. No paid placements.
       </p>
     </div>
   );

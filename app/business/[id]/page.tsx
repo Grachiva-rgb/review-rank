@@ -38,11 +38,11 @@ export async function generateMetadata({ params }: BusinessPageProps): Promise<M
     const place = await getPlaceDetails(id);
     const score = Math.round(place.review_rank_score);
     return {
-      title: `${place.name} — Review Rank Score & Trust Analysis`,
-      description: `${place.name} has a Review Rank Score of ${score}/100 based on ${place.user_ratings_total.toLocaleString()} reviews. See full trust analysis, ratings, and customer feedback.`,
+      title: `${place.name} — ReviewRank Score & Trust Analysis`,
+      description: `${place.name} has a ReviewRank Score of ${score}/100 based on ${place.user_ratings_total.toLocaleString()} reviews. See full trust analysis, ratings, and customer feedback.`,
       openGraph: {
         title: `${place.name} | ReviewRank`,
-        description: `Rated ${place.rating}★ across ${place.user_ratings_total.toLocaleString()} reviews. Review Rank Score: ${score}/100.`,
+        description: `Rated ${place.rating}★ across ${place.user_ratings_total.toLocaleString()} reviews. ReviewRank Score: ${score}/100.`,
       },
     };
   } catch {
@@ -118,7 +118,12 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
   const tier = getTrustTierFromRRS(place.review_rank_score, place.rating, place.user_ratings_total);
   const tierLabel = getTrustTierLabel(tier);
   const tierStyle = getTrustTierStyle(tier);
-  const insights = getBusinessInsights(place.rating, place.user_ratings_total, category);
+  const insights = getBusinessInsights(
+    place.rating,
+    place.user_ratings_total,
+    category,
+    place.review_rank_score
+  );
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://reviewrank.app';
@@ -319,7 +324,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
           <div className="grid sm:grid-cols-3 gap-4 mb-6">
             <div className="rounded-2xl border border-[#2F6F4E]/20 bg-[#2F6F4E]/5 p-4">
               <div className="text-xs text-[#2F6F4E] uppercase tracking-widest font-mono mb-3">
-                What customers praise
+                Common strengths in this category
               </div>
               <p className="text-sm text-[#241C15] leading-relaxed">{insights.whatCustomersPraise}</p>
             </div>
@@ -339,32 +344,59 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
             </div>
           </div>
 
-          {/* Smart Score Breakdown */}
+          {/* These three cards are category-level guidance, not review quotes —
+              say so rather than letting the layout imply extracted themes. */}
+          <p className="text-[11px] text-[#9A8C85] -mt-3 mb-6 leading-relaxed">
+            General guidance for businesses at this rating and review level in this
+            category — not statements extracted from this business&apos;s reviews.
+          </p>
+
+          {/* How this score was calculated — the four real components with their
+              real weights. (This panel previously rendered the retired
+              rating × log₁₀(reviews+1) formula visually equated to the 0–100
+              score — an equation that number cannot satisfy.) */}
           <div className="rounded-2xl border border-[#EDE8E3] bg-white p-5 mb-6 shadow-sm">
             <div className="text-xs text-[#7A6B63] uppercase tracking-widest font-mono mb-4">
-              Smart Score Breakdown
+              How this score was calculated
             </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="text-center">
-                <div className="font-mono text-2xl text-[#8B5E3C]">{place.rating.toFixed(1)}</div>
-                <div className="text-xs text-[#7A6B63] mt-0.5">Rating</div>
-              </div>
-              <span className="text-[#D9CEC8] text-xl font-mono">×</span>
-              <div className="text-center">
-                <div className="font-mono text-lg text-[#241C15]">
-                  log₁₀({place.user_ratings_total.toLocaleString()}+1)
+            {place.score_components ? (
+              <div className="space-y-2.5">
+                {(
+                  [
+                    ['Rating quality (Bayesian-adjusted)', place.score_components.bayesian, '55%'],
+                    ['Review volume', place.score_components.volume, '20%'],
+                    ['Sampled review sentiment', place.score_components.sentiment, '15%'],
+                    ['Rating consistency', place.score_components.consistency, '10%'],
+                  ] as const
+                ).map(([compLabel, value, weight]) => (
+                  <div key={compLabel} className="flex items-center gap-3">
+                    <span className="text-xs text-[#5A4A3F] w-56 flex-shrink-0">{compLabel}</span>
+                    <div className="flex-1 h-2 rounded-full bg-[#F2EDE7] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#8B5E3C]"
+                        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-xs text-[#241C15] w-10 text-right tabular-nums">
+                      {Math.round(value)}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#9A8C85] w-9 text-right">{weight}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#EDE8E3]">
+                  <span className="text-xs text-[#7A6B63]">Weighted ReviewRank Score</span>
+                  <span className="font-mono text-xl text-[#2F6F4E] font-bold">
+                    {Math.round(place.review_rank_score)}
+                    <span className="text-sm opacity-60">/100</span>
+                  </span>
                 </div>
-                <div className="text-xs text-[#7A6B63] mt-0.5">Review volume</div>
               </div>
-              <span className="text-[#D9CEC8] text-xl font-mono">=</span>
-              <div className="text-center">
-                <div className="font-mono text-2xl text-[#2F6F4E]">
-                  {Math.round(place.review_rank_score)}
-                  <span className="text-sm opacity-60">/100</span>
-                </div>
-                <div className="text-xs text-[#7A6B63] mt-0.5">Review Rank Score</div>
+            ) : (
+              <div className="font-mono text-2xl text-[#2F6F4E]">
+                {Math.round(place.review_rank_score)}
+                <span className="text-sm opacity-60">/100</span>
               </div>
-            </div>
+            )}
             {place.score_explanations && place.score_explanations.length > 0 && (
               <ul className="text-xs text-[#5A4A3F] mt-4 border-t border-[#EDE8E3] pt-3 space-y-1.5 leading-relaxed">
                 {place.score_explanations.map((reason, i) => (
@@ -376,9 +408,14 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
               </ul>
             )}
             <p className="text-[11px] text-[#9A8C85] mt-3 leading-relaxed">
-              Review Rank Score (0–100) blends a Bayesian-adjusted rating, review volume,
-              recent sentiment, and rating consistency. It's a predictive reputation estimate —
-              not a replica of Google or Yelp's ranking.
+              The ReviewRank Score (0–100) weights a Bayesian-adjusted rating (55%), review
+              volume (20%), sentiment of Google&apos;s up-to-5-review sample (15%), and rating
+              consistency across that sample (10%). Sentiment and consistency are blended
+              toward volume-based priors when the sample is small relative to total reviews.
+              Google selects the sample by relevance, not recency.{' '}
+              <Link href="/methodology" className="underline hover:text-[#8B5E3C]">
+                Full methodology →
+              </Link>
             </p>
           </div>
 
@@ -435,7 +472,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
               Own this business?
             </div>
             <p className="text-sm text-[#5A4A3F] leading-relaxed mb-4">
-              See why this business ranks here and how customers describe it. Get a breakdown of your Smart Score and what it would take to reach the next trust tier.
+              See why this business ranks here and how customers describe it. Get a breakdown of your ReviewRank Score and what it would take to reach the next trust tier.
             </p>
             <a
               href={`/report-request?businessId=${encodeURIComponent(place.place_id)}&businessName=${encodeURIComponent(place.name)}`}
@@ -450,7 +487,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
 
           <div className="mt-10 pt-6 border-t border-[#EDE8E3] text-center space-y-1">
             <p className="text-xs text-[#7A6B63] font-mono">
-              Data sourced from Google Places API{place.ta_data ? ' · Tripadvisor' : ''} · ReviewRank Smart Score
+              Data sourced from Google Places API{place.ta_data ? ' · Tripadvisor' : ''} · ReviewRank Score
             </p>
             <p className="text-xs text-[#9A8C85]">
               Rankings are based on public review signals only. No paid placements.

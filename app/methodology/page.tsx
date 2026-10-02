@@ -1,13 +1,48 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import ClientTracker from '@/components/ClientTracker';
+import { calculateReviewRankScore, BusinessReview } from '@/lib/reviewRankScoring';
 
 export const metadata: Metadata = {
   // The root layout's title template appends "| ReviewRank".
-  title: 'Methodology — How Review Rank Scores Work',
+  title: 'Methodology — How ReviewRank Scores Work',
   description:
-    'A transparent breakdown of the Review Rank Score: Bayesian-adjusted rating, review volume, recent sentiment, and rating consistency. No paid placements.',
+    'A transparent breakdown of the ReviewRank Score: Bayesian-adjusted rating, review volume, sampled review sentiment, and rating consistency. No paid placements.',
 };
+
+// ─── Worked example — COMPUTED FROM THE PRODUCTION SCORER AT BUILD TIME ──────
+// Never hard-code a result here. A previous version of this page printed a
+// composite ("87.7") that neither its own printed components (88.27) nor the
+// production code (82.5) produced. Running the real scorer makes divergence
+// between this page and production impossible.
+
+function sampleReviews(ratings: number[]): BusinessReview[] {
+  return ratings.map((rating, i) => ({
+    id: String(i),
+    rating,
+    text: '',
+    createdAt: new Date().toISOString(),
+    platform: 'google' as const,
+  }));
+}
+
+const EX = { rating: 4.7, reviews: 412, sample: [5, 5, 4, 5, 5] };
+const exampleResult = calculateReviewRankScore({
+  businessId: 'methodology-example',
+  rating: EX.rating,
+  totalReviewCount: EX.reviews,
+  reviews: sampleReviews(EX.sample),
+});
+
+const SMALL = { rating: 4.9, reviews: 18, sample: [5, 5, 5, 5, 4] };
+const smallResult = calculateReviewRankScore({
+  businessId: 'methodology-small-example',
+  rating: SMALL.rating,
+  totalReviewCount: SMALL.reviews,
+  reviews: sampleReviews(SMALL.sample),
+});
+
+const exEvidence = Math.sqrt(EX.sample.length / EX.reviews);
 
 function Section({
   kicker,
@@ -60,6 +95,7 @@ function ComponentRow({
 }
 
 export default function MethodologyPage() {
+  const c = exampleResult.componentScores;
   return (
     <div className="min-h-screen bg-[#FAF7F0]">
       <ClientTracker event="methodology_viewed" />
@@ -82,109 +118,131 @@ export default function MethodologyPage() {
         {/* Hero */}
         <div className="mb-12">
           <div className="text-xs text-[#8B5E3C] uppercase tracking-widest font-mono mb-3">
-            Methodology · v1.0
+            Methodology · v1.1
           </div>
           <h1 className="font-display text-4xl sm:text-5xl text-[#241C15] leading-tight mb-4">
-            How Review Rank Scores work
+            How ReviewRank Scores work
           </h1>
           <p className="text-lg text-[#5A4A3F] leading-relaxed">
-            Every business on ReviewRank receives a Review Rank Score between 0
+            Every business on ReviewRank receives a ReviewRank Score between 0
             and 100. The score blends four measurable signals from public review
             data. No business pays to move up. No business can pay to hide a
-            score. This page documents exactly how the number is calculated.
+            score. This page documents exactly how the number is calculated —
+            every formula below is the one production runs, and the worked
+            example is computed by the production scoring code when this page
+            is built.
           </p>
         </div>
 
         {/* The formula */}
         <Section kicker="The formula" title="Four components, one score">
           <p>
-            The Review Rank Score is a weighted composite of four independent
-            signals. Each is scored on a 0–100 scale before weighting.
+            The ReviewRank Score is a weighted composite of four signals. Each
+            is scored on a 0–100 scale before weighting.
           </p>
 
           <div className="rounded-2xl border border-[#EDE8E3] bg-white p-6 mt-5 shadow-sm">
             <ComponentRow
               weight="55%"
               name="Bayesian-adjusted rating"
-              description="We use a shrinkage estimator that pulls every rating toward a global prior (4.2★ across 15 phantom reviews) until a business has enough real reviews to overcome that pull. A single glowing 5.0★ review no longer beats a 4.7★/400-review competitor."
+              description="A shrinkage estimator pulls every rating toward a global prior (4.2★ across 15 phantom reviews) until a business has enough real reviews to overcome the pull: bayesian = (15 × 4.2 + reviews × rating) / (15 + reviews). The 1–5 result maps to 0–100 as (bayesian − 3.0) / 2.0 × 100, clamped — so 3.0★ scores 0 and 5.0★ scores 100."
             />
             <ComponentRow
               weight="20%"
               name="Review volume"
-              description="Log-scaled to reward depth of feedback without letting a 10,000-review chain dominate a 400-review local. The curve saturates around 2,000 reviews."
+              description="log₁₀(reviews + 1) / log₁₀(2001) × 100, clamped to 100. Rewards depth of feedback without letting a 10,000-review chain dominate a 400-review local; the curve saturates at 2,000 reviews."
             />
             <ComponentRow
               weight="15%"
-              name="Recent sentiment"
-              description="Average rating across the 5 most recent reviews surfaced by Google. Flags businesses whose experience has recently shifted — up or down."
+              name="Sampled review sentiment"
+              description="Average star rating of the up-to-5 reviews Google's API returns, mapped as (avg − 3.0) / 2.0 × 100. Important: Google selects and orders these reviews BY RELEVANCE — the API offers no chronological option, so this is a sample, not the most recent reviews. With no rated reviews in the sample this component is a neutral 50."
             />
             <ComponentRow
               weight="10%"
               name="Rating consistency"
-              description="Standard deviation of recent review ratings. A business delivering 4.6, 4.7, 4.5, 4.8, 4.6 is scored higher than one delivering 5, 5, 1, 5, 5 — even when the mean is identical."
+              description="Population standard deviation of the sampled review ratings, scored as (1 − min(stddev / 1.5, 1)) × 100 — stddev 0 scores 100, stddev ≥ 1.5 scores 0. With fewer than 2 rated reviews this component defaults to 75."
             />
           </div>
 
           <p className="mt-4">
-            The composite is then clamped to 0–100 and rounded to one decimal.
+            <strong>Evidence blending.</strong> Because sentiment and
+            consistency come from a sample of at most 5 reviews, they are
+            blended toward priors in proportion to how much of the business the
+            sample actually covers: <span className="font-mono text-xs">weight
+            = min(1, √(sampleSize / totalReviews))</span>. The sentiment prior
+            is the overall rating mapped to the same 0–100 scale; the
+            consistency prior is 75. For a 412-review business the sample
+            weight is ≈ {exEvidence.toFixed(2)}, so the sampled signals
+            contribute lightly; for a business with ≤ 5 reviews the sample is
+            the whole population and the weight is 1.
+          </p>
+          <p>
+            The weighted composite is clamped to 0–100 and rounded to one
+            decimal. (A reserved fraud-signal multiplier exists in the code and
+            is currently fixed at 1.0 — it does not affect any score today.)
+            Component scores shown on business pages are the post-blending
+            values, individually rounded to one decimal; the final score is
+            computed from unrounded values, so recomputing from displayed
+            components can differ by up to ±0.1.
           </p>
         </Section>
 
         {/* Worked example */}
         <Section kicker="Worked example" title="Scoring a real business">
           <p>
-            Consider a landscaping company with a 4.7★ rating, 412 reviews, and
-            recent reviews of 4.8, 4.6, 4.9, 4.5, 4.7.
+            A landscaping company with a {EX.rating}★ rating, {EX.reviews}{' '}
+            reviews, and sampled review ratings of {EX.sample.join(', ')}.
+            Every number below comes from running the production scorer on
+            these inputs when this page is built:
           </p>
 
           <div className="rounded-2xl border border-[#EDE8E3] bg-white p-6 mt-4 shadow-sm font-mono text-xs text-[#241C15]">
             <div className="space-y-2 leading-relaxed">
               <div>
-                <span className="text-[#7A6B63]">Bayesian rating</span> = (15 ×
-                4.2 + 412 × 4.7) / (15 + 412) ={' '}
-                <span className="text-[#8B5E3C] font-bold">4.68</span>
+                <span className="text-[#7A6B63]">Bayesian rating (0–100)</span>{' '}
+                = <span className="text-[#8B5E3C] font-bold">{c.bayesian.toFixed(1)}</span>
               </div>
               <div>
-                → normalised to 0–100:{' '}
-                <span className="text-[#8B5E3C] font-bold">89.2</span>
+                <span className="text-[#7A6B63]">Volume</span> ={' '}
+                <span className="text-[#8B5E3C] font-bold">{c.volume.toFixed(1)}</span>
               </div>
-              <div className="pt-2">
-                <span className="text-[#7A6B63]">Volume</span> = log₁₀(412+1) /
-                log₁₀(2001) × 100 ={' '}
-                <span className="text-[#8B5E3C] font-bold">79.1</span>
+              <div>
+                <span className="text-[#7A6B63]">Sampled sentiment (after blending)</span> ={' '}
+                <span className="text-[#8B5E3C] font-bold">{c.sentiment.toFixed(1)}</span>
               </div>
-              <div className="pt-2">
-                <span className="text-[#7A6B63]">Sentiment</span> = avg(4.8, 4.6,
-                4.9, 4.5, 4.7) / 5 × 100 ={' '}
-                <span className="text-[#8B5E3C] font-bold">94.0</span>
-              </div>
-              <div className="pt-2">
-                <span className="text-[#7A6B63]">Consistency</span> = (1 −
-                stddev/2) × 100 ={' '}
-                <span className="text-[#8B5E3C] font-bold">92.9</span>
+              <div>
+                <span className="text-[#7A6B63]">Consistency (after blending)</span> ={' '}
+                <span className="text-[#8B5E3C] font-bold">{c.consistency.toFixed(1)}</span>
               </div>
               <div className="pt-3 border-t border-[#EDE8E3]">
-                <span className="text-[#7A6B63]">Composite</span> = 89.2×0.55 +
-                79.1×0.20 + 94.0×0.15 + 92.9×0.10
+                <span className="text-[#7A6B63]">Composite</span> = {c.bayesian.toFixed(1)}×0.55 +{' '}
+                {c.volume.toFixed(1)}×0.20 + {c.sentiment.toFixed(1)}×0.15 +{' '}
+                {c.consistency.toFixed(1)}×0.10
               </div>
               <div>
                 ={' '}
                 <span className="text-[#2F6F4E] font-bold text-base">
-                  87.7 / 100 — Elite
+                  {exampleResult.finalScore} / 100 — {exampleResult.rankLabel}
                 </span>
               </div>
             </div>
           </div>
 
           <p className="mt-4">
-            A nearby competitor with 4.9★ but only 18 reviews would score ~63.
-            The Bayesian shrinkage is doing the work: we need evidence before we
-            declare someone the best.
+            A nearby competitor with {SMALL.rating}★ but only {SMALL.reviews}{' '}
+            reviews scores {smallResult.finalScore} ({smallResult.rankLabel})
+            on the same formula. The Bayesian shrinkage and the volume
+            component are doing the work: we need evidence before we declare
+            someone the best.
           </p>
         </Section>
 
         {/* Trust tiers */}
-        <Section kicker="How scores map to tiers" title="Trust tiers">
+        <Section kicker="How scores map to labels" title="Score bands and trust tiers">
+          <p>
+            The score maps to a <strong>band label</strong> shown with the
+            number:
+          </p>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <div className="font-mono text-xs text-emerald-800 font-bold tracking-widest mb-1">
@@ -192,7 +250,7 @@ export default function MethodologyPage() {
               </div>
               <p className="text-xs text-[#241C15] leading-relaxed">
                 Exceptional rating backed by substantial review depth and
-                consistent recent experience.
+                consistent sampled experience.
               </p>
             </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
@@ -223,34 +281,56 @@ export default function MethodologyPage() {
             </div>
           </div>
           <p className="text-xs text-[#7A6B63] mt-3">
+            Scores under 35 are labelled <strong>Limited Reputation</strong>.
             Businesses under 4.0★ are not displayed in ranked results at all,
             regardless of other signals.
           </p>
+          <p className="mt-3">
+            Separately, the <strong>tier badge</strong> next to a business name
+            (Highly Trusted / Trusted / Established) applies additional gates on
+            top of the score, so a high score with thin evidence does not earn
+            the top badge: Highly Trusted requires score ≥ 65 <em>and</em> rating
+            ≥ 4.5 <em>and</em> ≥ 150 reviews; Trusted requires score ≥ 50 and
+            rating ≥ 4.2; Established requires score ≥ 35, rating ≥ 4.0, and
+            ≥ 50 reviews.
+          </p>
+        </Section>
+
+        {/* Data sources */}
+        <Section kicker="Data sources" title="Where the data comes from">
+          <ul className="list-none space-y-2 mt-1">
+            {[
+              'Ratings and review counts come from the Google Places API.',
+              "Google's API returns at most 5 reviews per business, selected and ordered by RELEVANCE as determined by Google. It offers no way to request the most recent reviews, so sentiment and consistency are computed from this relevance-ranked sample — treat them as a spot-check, not a trend.",
+              'For hotels, restaurants, and attractions we also display Tripadvisor data (rating, review count, ranking, awards) in a supplemental panel. Tripadvisor data does NOT change the ReviewRank Score — it is shown side-by-side so you can compare platforms yourself.',
+              'The "review sample above/below average" indicator compares the sampled reviews against the long-run rating. It is a proxy, not a measured trend — we do not yet have historical data.',
+            ].map((item, i) => (
+              <li key={i} className="flex gap-2 text-sm text-[#5A4A3F] leading-relaxed">
+                <span className="text-[#B8A89F] flex-shrink-0 mt-1">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </Section>
 
         {/* What we don't measure */}
-        <Section
-          kicker="Transparency"
-          title="What we don't measure (yet)"
-        >
+        <Section kicker="Transparency" title="What we don't measure (yet)">
           <p>
             Honest limitations. Any reputation score is only as good as the data
-            it sees. Here is what the current Review Rank Score{' '}
+            it sees. Here is what the current ReviewRank Score{' '}
             <strong>does not</strong> incorporate:
           </p>
           <ul className="list-none space-y-2 mt-3">
             {[
-              'Full review history. Google Places returns the 5 most recent public reviews. Sentiment and consistency are estimated from that window.',
-              'Owner response rate. We plan to add this in v1.1 once we build our own review-tracking backend.',
-              'Cross-platform signals (Yelp, BBB, Facebook, Nextdoor). Single-source for now to avoid biasing against businesses who haven\'t claimed every profile.',
+              'Full review history. We see the aggregate rating, the review count, and a 5-review relevance-ranked sample — nothing more.',
+              'True recency. Because the sample is relevance-ranked, nothing in the score is genuinely "recent". Historical tracking is planned; until it exists we avoid recency claims.',
+              'Owner response rate. Planned once we build our own review-tracking backend.',
+              'Cross-platform scoring (Yelp, BBB, Facebook, Nextdoor). Tripadvisor data is displayed for hospitality businesses but does not alter the score.',
               'Review velocity. Whether a business earned 400 reviews in 10 years or in 6 months looks identical today.',
               'Individual reviewer credibility. We treat every public reviewer\'s contribution equally.',
               'Paid or sponsored signals. We reject them by design — they would compromise the score.',
             ].map((item, i) => (
-              <li
-                key={i}
-                className="flex gap-2 text-sm text-[#5A4A3F] leading-relaxed"
-              >
+              <li key={i} className="flex gap-2 text-sm text-[#5A4A3F] leading-relaxed">
                 <span className="text-[#B8A89F] flex-shrink-0 mt-1">·</span>
                 <span>{item}</span>
               </li>
@@ -259,19 +339,16 @@ export default function MethodologyPage() {
         </Section>
 
         {/* How this differs */}
-        <Section
-          kicker="How we compare"
-          title="Different from Google or Yelp"
-        >
+        <Section kicker="How we compare" title="Different from Google or Yelp">
           <p>
             Google and Yelp rank businesses primarily on raw rating plus proximity,
             with paid placements mixed in. A 5.0★ business with 2 reviews can
             outrank a 4.7★ business with 400 reviews on those platforms.
           </p>
           <p>
-            Review Rank Score is designed to answer a different question:{' '}
-            <em>"If I walked in today, how likely is this to be a good
-            experience?"</em> That requires evidence. The Bayesian prior and
+            The ReviewRank Score is designed to answer a different question:{' '}
+            <em>&quot;If I walked in today, how likely is this to be a good
+            experience?&quot;</em> That requires evidence. The Bayesian prior and
             volume signal exist to prevent small-sample businesses from
             outranking well-established competitors purely on statistical luck.
           </p>
@@ -286,10 +363,28 @@ export default function MethodologyPage() {
           <div className="rounded-2xl border border-[#EDE8E3] bg-white divide-y divide-[#EDE8E3] shadow-sm">
             <div className="p-4">
               <div className="font-mono text-xs text-[#8B5E3C] uppercase tracking-widest mb-1">
+                v1.1 — 2026-10-02
+              </div>
+              <p className="text-sm text-[#241C15] font-medium mb-1">
+                Transparency corrections
+              </p>
+              <p className="text-xs text-[#7A6B63] leading-relaxed">
+                This page now documents the full production formula, including
+                the evidence-blending step for sampled signals, and its worked
+                example is computed by the production scorer at build time.
+                &quot;Recent sentiment&quot; renamed to &quot;sampled review
+                sentiment&quot; — Google&apos;s API returns relevance-ranked
+                samples, not recent reviews. Tripadvisor data no longer adjusts
+                the score (it previously blended into hospitality scores on
+                some pages but not others); it is now display-only.
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="font-mono text-xs text-[#8B5E3C] uppercase tracking-widest mb-1">
                 v1.0 — 2026-05-07
               </div>
               <p className="text-sm text-[#241C15] font-medium mb-1">
-                Initial Review Rank Score release
+                Initial ReviewRank Score release
               </p>
               <p className="text-xs text-[#7A6B63] leading-relaxed">
                 Bayesian rating (55%) + volume (20%) + sentiment (15%) +

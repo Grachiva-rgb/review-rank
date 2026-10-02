@@ -68,7 +68,7 @@ export default function PartnerPage() {
           />
           <Feature
             title="Ranking-independent"
-            body="Partner status does NOT affect your Review Rank Score. We maintain editorial independence."
+            body="Partner status does NOT affect your ReviewRank Score. We maintain editorial independence."
           />
         </div>
 
@@ -85,7 +85,7 @@ export default function PartnerPage() {
           </div>
           <p className="text-sm text-[#5A4A3F] leading-relaxed">
             Partner status is clearly separated from rankings. Paying for the
-            partner program does not influence your Review Rank Score, your
+            partner program does not influence your ReviewRank Score, your
             position in search results, or your trust tier. Rankings are
             calculated from public review signals only.
           </p>

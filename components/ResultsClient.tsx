@@ -1,4 +1,5 @@
 'use client';
+import { isRisingStar } from '@/lib/scoreBands';
 
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
@@ -69,10 +70,12 @@ export default function ResultsClient({
       }
       if (filter === 'rating') return b.rating - a.rating;
       if (filter === 'reviews') return b.user_ratings_total - a.user_ratings_total;
-      // rising_stars: high rating, prioritise under-300-review businesses
+      // rising_stars: prioritise businesses meeting the central Rising Star
+      // definition (rating AND review-count gates — the sort previously
+      // ignored the rating gate the card badge applied).
       if (filter === 'rising_stars') {
-        const aRising = a.user_ratings_total < 300 ? 1 : 0;
-        const bRising = b.user_ratings_total < 300 ? 1 : 0;
+        const aRising = isRisingStar(a.rating, a.user_ratings_total) ? 1 : 0;
+        const bRising = isRisingStar(b.rating, b.user_ratings_total) ? 1 : 0;
         if (aRising !== bRising) return bRising - aRising;
         return b.rating - a.rating;
       }
@@ -81,7 +84,7 @@ export default function ResultsClient({
   }, [places, filter]);
 
   const risingStars = useMemo(
-    () => places.filter((p) => p.rating >= 4.7 && p.user_ratings_total < 300),
+    () => places.filter((p) => isRisingStar(p.rating, p.user_ratings_total)),
     [places]
   );
 

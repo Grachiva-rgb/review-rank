@@ -28,7 +28,7 @@ const HOW_WE_RANK = [
   },
   {
     label: 'Combined trust score',
-    description: 'Our Review Rank Score combines both factors, so only businesses that are both highly rated and widely reviewed rise to the top.',
+    description: 'The ReviewRank Score weighs these alongside sampled sentiment and consistency, so only businesses that are both highly rated and widely reviewed rise to the top.',
   },
 ];
 
@@ -168,8 +168,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="max-w-3xl mx-auto">
             <h2 className="font-display text-2xl text-[#241C15] mb-2 text-center">How we rank businesses</h2>
             <p className="text-sm text-[#7A6B63] text-center mb-8">
-              We combine star rating with review volume into a single trust score.
-              Businesses cannot pay to improve their ranking.
+              We blend rating quality, review volume, sampled sentiment, and consistency
+              into a single score. Businesses cannot pay to improve their ranking.
             </p>
             <div className="grid sm:grid-cols-3 gap-6">
               {HOW_WE_RANK.map((item) => (
@@ -181,8 +181,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </div>
             <div className="mt-8 rounded-xl border border-[#EDE8E3] bg-white px-5 py-4 text-center">
               <p className="text-sm text-[#5A4A3F]">
-                The <strong>Review Rank Score</strong> (0–100) weighs rating quality, review volume,
-                recency, and consistency — giving you a single number you can actually compare.
+                The <strong>ReviewRank Score</strong> (0–100) weighs rating quality, review volume,
+                sampled review sentiment, and consistency — one number you can actually compare.
               </p>
               <Link href="/methodology" className="text-xs text-[#8B5E3C] hover:text-[#6B4A2F] mt-2 inline-block">
                 Read the full methodology →
@@ -230,7 +230,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div>
               <div className="font-mono text-sm text-[#8B5E3C] mb-1">0 – 100</div>
-              <div className="text-xs text-[#7A6B63]">Review Rank Score scale</div>
+              <div className="text-xs text-[#7A6B63]">ReviewRank Score scale</div>
             </div>
             <div>
               <div className="font-mono text-sm text-[#241C15] mb-1">Up to 20</div>

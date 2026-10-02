@@ -14,10 +14,11 @@ type RawPlacesReview = {
 };
 
 /**
- * Normalize the Places API's recent-review shape into BusinessReview — the
- * input shape our scoring engine expects. Places API v1 returns up to ~5
- * most recent reviews per business; that's the signal we use for sentiment
- * and consistency sub-scores.
+ * Normalize the Places API's review shape into BusinessReview — the input
+ * shape our scoring engine expects. Places API v1 returns up to 5 reviews
+ * per business, selected and sorted BY RELEVANCE by Google (the New API has
+ * no chronological sort option) — a sample, NOT the most recent reviews.
+ * That sample feeds the sentiment and consistency sub-scores.
  */
 function toBusinessReviews(raw: RawPlacesReview[] | undefined): BusinessReview[] {
   if (!raw || raw.length === 0) return [];
@@ -499,7 +500,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     url: (p.googleMapsUri as string) || undefined,
     reviews,
     smart_score: calculateSmartScore(rating, reviewCount),
-    review_rank_score: taData ? multiSourceScore.finalScore : rrs.finalScore,
+    // ALWAYS the single-source score. The TripAdvisor blend used to replace
+    // the displayed number here (detail/compare pages) while search results
+    // kept the unblended score — the same business showed two different
+    // scores depending on the page, and the label below was derived from the
+    // unblended value either way. TA data remains visible in the supplemental
+    // panel (ta_data / multi_source_score) but no longer alters the score.
+    review_rank_score: rrs.finalScore,
     rank_label: rrs.rankLabel,
     score_explanations: rrs.explanations,
     score_components: rrs.componentScores,

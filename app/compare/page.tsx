@@ -11,7 +11,7 @@ import SmartScoreBadge from '@/components/SmartScoreBadge';
 
 export const metadata: Metadata = {
   title: 'Compare Businesses',
-  description: 'Side-by-side comparison of Review Rank scores, ratings, and trust signals.',
+  description: 'Side-by-side comparison of ReviewRank Scores, ratings, and trust signals.',
 };
 
 interface ComparePageProps {
@@ -135,7 +135,7 @@ function BusinessColumn({
           <p className="text-xs font-semibold text-[#5A4A3F] uppercase tracking-widest">Score breakdown</p>
           <ScoreBar label="Rating quality" value={place.score_components.bayesian} peer={peer.score_components.bayesian} />
           <ScoreBar label="Review volume" value={place.score_components.volume} peer={peer.score_components.volume} />
-          <ScoreBar label="Recent sentiment" value={place.score_components.sentiment} peer={peer.score_components.sentiment} />
+          <ScoreBar label="Sampled sentiment" value={place.score_components.sentiment} peer={peer.score_components.sentiment} />
           <ScoreBar label="Consistency" value={place.score_components.consistency} peer={peer.score_components.consistency} />
         </div>
       )}
@@ -226,7 +226,7 @@ function comparisonInsight(a: PlaceDetail, b: PlaceDetail): string {
   const diffs: [string, number][] = [
     ['overall rating quality', hc.bayesian - lc.bayesian],
     ['review volume', hc.volume - lc.volume],
-    ['recent review sentiment', hc.sentiment - lc.sentiment],
+    ['sampled review sentiment', hc.sentiment - lc.sentiment],
     ['rating consistency', hc.consistency - lc.consistency],
   ];
   diffs.sort((x, y) => y[1] - x[1]);
@@ -326,8 +326,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             {insight}
           </p>
           <p className="mt-1 text-xs text-[#B8A89F]">
-            Trend indicators are based on recent review patterns vs. the long-run average.
-            Review Rank does not reproduce Google&apos;s ranking algorithm.
+            Trend indicators compare the sentiment of Google's review sample vs. the long-run average.
+            ReviewRank does not reproduce Google&apos;s ranking algorithm.
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Place } from '@/lib/types';
 import { BusinessCategory, getTrustTierFromRRS, getTrustTierLabel, getTrustTierStyle, getRankingExplanation } from '@/lib/ranking';
+import { isRisingStar } from '@/lib/scoreBands';
 import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
 import QuoteButton from './QuoteButton';
@@ -42,7 +43,7 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
     : [getRankingExplanation(place.rating, place.user_ratings_total, category)];
 
   // Flag business as a rising star: high rating, limited review history
-  const isRisingStar = place.rating >= 4.7 && place.user_ratings_total < 300;
+  const risingStar = isRisingStar(place.rating, place.user_ratings_total);
 
   const mapsUrl =
     place.url ||
@@ -83,7 +84,7 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
               {tierLabel}
             </span>
           )}
-          {isRisingStar && !tier && (
+          {risingStar && !tier && (
             <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 flex-shrink-0 mt-0.5">
               Rising Star
             </span>
