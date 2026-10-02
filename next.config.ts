@@ -56,11 +56,13 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              // static.cloudflareinsights.com: Cloudflare Web Analytics beacon
+              "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               // Allow connect from self + Capacitor bridge origins + Google APIs
-              `connect-src 'self' ${CAPACITOR_ORIGINS} https://places.googleapis.com https://maps.googleapis.com https://us.i.posthog.com https://app.posthog.com`,
+              // + cloudflareinsights.com (the beacon POSTs its metrics there)
+              `connect-src 'self' ${CAPACITOR_ORIGINS} https://places.googleapis.com https://maps.googleapis.com https://us.i.posthog.com https://app.posthog.com https://cloudflareinsights.com`,
               "img-src 'self' https://maps.googleapis.com https://lh3.googleusercontent.com data: blob:",
               // frame-ancestors replaces X-Frame-Options
               "frame-ancestors 'none'",
