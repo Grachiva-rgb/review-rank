@@ -9,13 +9,15 @@ workflows:
     max_build_duration: 60
     environment:
       groups:
-        - reviewrank_credentials   # Codemagic → Team → Global variables
+        # Codemagic → Team → Global variables. This group MUST define
+        # KEY_PASSWORD and STORE_PASSWORD (mark both as secure). They were
+        # previously hardcoded here in a public repo — rotate the keystore
+        # and never commit the replacement values.
+        - reviewrank_credentials
       vars:
         CAPACITOR_SERVER_URL: $VERCEL_URL
         KEYSTORE_PATH: /tmp/reviewrank-release.keystore
         KEY_ALIAS: reviewrank
-        KEY_PASSWORD: reviewrank2024
-        STORE_PASSWORD: reviewrank2024
       node: 22.11.0
       java: 21
     scripts:

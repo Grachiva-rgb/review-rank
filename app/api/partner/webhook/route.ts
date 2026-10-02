@@ -108,13 +108,22 @@ async function activatePartnerFromSession(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // Fallback: correlate by email for the most recent pending row.
+  // Fallback: correlate by email — but activate ONLY the single most recent
+  // pending row, resolved by id. The previous filter-only PATCH updated every
+  // pending row with that email, so an attacker who pre-created pending rows
+  // using a victim's email got them all activated for free the moment the
+  // victim completed a legitimate checkout.
   if (email) {
-    await sbUpdate(
+    const rows = await sbSelect<{ id: string }>(
       'partners',
-      `contact_email=eq.${encodeURIComponent(email)}&status=eq.pending`,
-      patch
-    );
+      `contact_email=eq.${encodeURIComponent(email)}&status=eq.pending` +
+        `&select=id&order=created_at.desc&limit=1`
+    ).catch(() => [] as { id: string }[]);
+
+    const rowId = rows[0]?.id;
+    if (rowId) {
+      await sbUpdate('partners', `id=eq.${encodeURIComponent(rowId)}`, patch);
+    }
   }
 }
 

@@ -1,7 +1,9 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getPlaceDetails } from '@/lib/places';
+import { rateLimit, ipFromHeaders } from '@/lib/ratelimit';
 import { PlaceDetail, TrendSignal } from '@/lib/types';
 import NavLogo from '@/components/NavLogo';
 import StarRating from '@/components/StarRating';
@@ -256,6 +258,30 @@ function comparisonInsight(a: PlaceDetail, b: PlaceDetail): string {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function ComparePage({ searchParams }: ComparePageProps) {
+  // Rate limit BEFORE any billed work, mirroring /results. This page renders
+  // dynamically and triggers TWO Place Details calls at the top billing tier
+  // (the field mask includes reviews) for arbitrary caller-chosen place IDs —
+  // unique valid IDs defeat the Supabase cache, which made this the cheapest
+  // unauthenticated spend path once /results got its limiter. 10/min is ample
+  // for humans comparing businesses. Per-instance limiter; the hard spend
+  // ceiling remains the Google Cloud quota cap.
+  const requestHeaders = await headers();
+  const { allowed } = rateLimit(`compare:${ipFromHeaders(requestHeaders)}`, 10, 60_000);
+  if (!allowed) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-[#5A4A3F] mb-4">
+            Too many comparisons from your connection. Please wait a moment and try again.
+          </p>
+          <Link href="/" className="text-[#8B5E3C] hover:text-[#6B4A2F] text-sm">
+            ← Back to search
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const { a, b, cat = '' } = await searchParams;
 
   if (!a || !b || !PLACE_ID_RE.test(a) || !PLACE_ID_RE.test(b) || a === b) {

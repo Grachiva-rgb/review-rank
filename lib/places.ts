@@ -1,7 +1,7 @@
 import { Place, PlaceDetail, NormalizedBusiness } from './types';
 import { calculateSmartScore, MIN_DISPLAY_RATING, detectCategory } from './ranking';
 import { calculateReviewRankScore, BusinessReview, computeTrendSignal, getTrendLabel } from './reviewRankScoring';
-import { getOrFetchTAData } from './tripadvisor';
+import { getCachedTAEnrichment } from './tripadvisor';
 import { computeMultiSourceScore } from './multiSourceScoring';
 import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
 
@@ -457,20 +457,14 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
   );
 
   const businessName = displayName?.text ?? '';
-  const businessAddress = (p.formattedAddress as string) || '';
   const primaryType = (p.primaryType as string) || '';
 
-  const { category, taCategory } = categorizePlace(businessName, primaryType);
+  const { category } = categorizePlace(businessName, primaryType);
 
-  // Lazy TA enrichment: checks Supabase cache first; on cache miss calls TA API
-  // live and saves result. Non-blocking — null on any failure.
-  const taData = await getOrFetchTAData(
-    placeId,
-    businessName,
-    businessAddress,
-    category,
-    taCategory
-  ).catch(() => null);
+  // TA enrichment is CACHE-ONLY on this consumer path: a Supabase read, never
+  // a live Tripadvisor call (those happen solely in the nightly ingestion
+  // job). On a miss this seeds the business for matching and returns null.
+  const taData = await getCachedTAEnrichment(placeId, category).catch(() => null);
 
   const multiSourceScore = computeMultiSourceScore(
     rating,
