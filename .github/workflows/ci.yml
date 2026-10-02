@@ -1,0 +1,33 @@
+# CI: typecheck + scoring regression tests on every push/PR.
+#
+# The build itself runs on Vercel (deployment preview per PR), so this
+# workflow covers what Vercel does not: the scoring-engine regression suite
+# that pins known values, boundaries, and missing-data behavior, plus a full
+# TypeScript pass. `next lint` is deliberately absent — the repo has no
+# ESLint config, and running it unconfigured prompts interactively.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Scoring regression tests
+        run: npm test
