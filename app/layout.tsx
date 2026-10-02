@@ -76,6 +76,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="bg-[#FAF7F0] text-[#241C15] antialiased min-h-screen">
         <PostHogProvider>{children}</PostHogProvider>
+        {/* Cloudflare Web Analytics — free, cookieless second traffic source
+            that also counts visitors whose browsers block client-side
+            analytics scripts aimed at known trackers. Renders only when
+            NEXT_PUBLIC_CF_ANALYTICS_TOKEN is set (Cloudflare dashboard →
+            Web Analytics → Add a site → copy the token, then add the env var
+            in Vercel). Deferred: never blocks page rendering. */}
+        {process.env.NEXT_PUBLIC_CF_ANALYTICS_TOKEN && (
+          <script
+            defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon={JSON.stringify({
+              token: process.env.NEXT_PUBLIC_CF_ANALYTICS_TOKEN,
+            })}
+          />
+        )}
       </body>
     </html>
   );
