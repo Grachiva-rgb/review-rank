@@ -67,6 +67,33 @@ export async function sbSelect<T = unknown>(
  * with that column name, or the write is treated as a plain insert and fails on
  * the unique constraint.
  */
+/**
+ * Insert a row, silently doing nothing if a row with the same `onConflict`
+ * column already exists. Unlike sbUpsert (merge-duplicates), this never
+ * overwrites existing column values — use it to seed rows whose fields other
+ * writers own (e.g. registering a business for ingestion without resetting
+ * its matched_at backoff).
+ */
+export async function sbInsertIgnore<T extends object>(
+  table: string,
+  row: T,
+  onConflict: string
+): Promise<void> {
+  if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL not set');
+  const res = await fetch(
+    `${url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`,
+    {
+      method: 'POST',
+      headers: headers({ Prefer: 'resolution=ignore-duplicates,return=minimal' }),
+      body: JSON.stringify(row),
+    }
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase insert-ignore ${table} failed: ${res.status} ${detail}`);
+  }
+}
+
 export async function sbUpsert<T extends object>(
   table: string,
   row: T,

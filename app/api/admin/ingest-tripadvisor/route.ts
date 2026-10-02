@@ -24,6 +24,7 @@ import {
   searchTALocation,
   fetchTALocationDetails,
   saveTAMapping,
+  saveNegativeMapping,
   saveTABusinessData,
   getCachedTAData,
 } from '@/lib/tripadvisor';
@@ -276,6 +277,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
 
       if (!taLocationId) {
+        // Write the "not on Tripadvisor" sentinel so matched_at refreshes and
+        // the RETRY_UNMATCHED_AFTER_MS backoff applies. Without this, the row
+        // kept its old (or null) matched_at, sorted to the front of the
+        // unmatched query again, and was re-searched on every run — paying
+        // a TA search call per day per unlisted business, forever.
+        await saveNegativeMapping(placeId).catch(() => {});
         results.push({ placeId, status: 'error', detail: 'No TA match found' });
         continue;
       }

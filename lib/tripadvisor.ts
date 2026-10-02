@@ -13,7 +13,7 @@ import type {
   TripadvisorBusinessData,
   ReviewSource,
 } from './types';
-import { sbSelect, sbInsert, sbUpsert, sbUpdate, isSupabaseConfigured } from './supabase';
+import { sbSelect, sbInsert, sbInsertIgnore, sbUpsert, sbUpdate, isSupabaseConfigured } from './supabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -194,9 +194,11 @@ export async function getCachedTAData(
 /**
  * Save a "no match" sentinel row so we don't repeatedly query Tripadvisor
  * for businesses that aren't listed there. Upserted so a retry refreshes
- * matched_at — the ingestion job uses that timestamp to back off.
+ * matched_at — the ingestion job uses that timestamp to back off for 90 days.
+ * Called by the ingestion job's no-match path (consumer requests no longer
+ * write it — they only seed unmatched rows).
  */
-async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
+export async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
   try {
     await sbUpsert('business_id_mapping', {
       google_place_id:  googlePlaceId,
@@ -218,19 +220,11 @@ async function saveNegativeMapping(googlePlaceId: string): Promise<void> {
  * skip the live lookup. Returns null on any failure — always non-blocking.
  *
  * @param googlePlaceId - Google place ID used as the cache key
- * @param name          - Business display name (used for TA search)
- * @param address       - Formatted address (improves TA match accuracy)
  * @param category      - Detected business category (e.g. "hospitality")
- * @param taCategory    - Optional explicit TA category, for callers that can
- *                        distinguish lodging from attractions better than our
- *                        catch-all "hospitality" bucket can
  */
-export async function getOrFetchTAData(
+export async function getCachedTAEnrichment(
   googlePlaceId: string,
-  name: string,
-  address: string,
-  category: string,
-  taCategory?: string
+  category: string
 ): Promise<TripadvisorBusinessData | null> {
   if (!isSupabaseConfigured()) return null;
   if (!isHospitalityCategory(category)) return null;
@@ -274,35 +268,26 @@ export async function getOrFetchTAData(
       }
     }
 
-    // 2. Cache miss — call TA API live with a 5-second timeout
-    const taApiKey = process.env.TRIPADVISOR_API_KEY;
-    if (!taApiKey) return null;
-
-    const searchCategory = taCategory ?? category;
-
-    const liveEnrich = async (): Promise<TripadvisorBusinessData | null> => {
-      // Reuse a known location ID rather than paying for a second search.
-      const taId = knownTAId ?? await searchTALocation(name, address, searchCategory);
-      if (!taId) {
-        saveNegativeMapping(googlePlaceId).catch(() => {}); // non-blocking
-        return null;
-      }
-      const taData = await fetchTALocationDetails(taId);
-      if (!taData) {
-        // Don't downgrade a known-good mapping to a sentinel over what may be
-        // a transient details failure — the ingestion job will retry it.
-        if (!knownTAId) saveNegativeMapping(googlePlaceId).catch(() => {});
-        return null;
-      }
-      // Fire-and-forget cache writes — never block returning the TA data.
-      // Confidence is a 0–1 fraction; the column cannot hold a percentage.
-      saveTAMapping(googlePlaceId, taId, 0.8).catch(() => {});
-      saveTABusinessData(googlePlaceId, taData).catch(() => {});
-      return taData;
-    };
-
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-    return await Promise.race([liveEnrich(), timeout]);
+    // 2. Cache miss — do NOT call the TA API live. This function sits on the
+    // consumer request path (getPlaceDetails → business/compare pages), so a
+    // live fetch here let anonymous page traffic spend TA API quota, and the
+    // 5s enrichment race added up to 5s of latency to a page render. The
+    // nightly ingestion job (/api/admin/ingest-tripadvisor) is the only live
+    // fetcher. All we do here is register the business for matching: a seed
+    // row with matched_at null sorts first in the job's unmatched query, so
+    // it gets matched within a day and this cache read serves it thereafter.
+    // insert-ignore, NOT upsert: a merge would reset matched_at on an
+    // existing "not on TA" sentinel and defeat its 90-day retry backoff.
+    // A mapping row with a known TA id but missing data row (knownTAId set)
+    // is likewise left for the job's refresh path to heal.
+    if (!knownTAId) {
+      sbInsertIgnore(
+        'business_id_mapping',
+        { google_place_id: googlePlaceId, ta_location_id: null, matched_at: null },
+        'google_place_id'
+      ).catch(() => {}); // fire-and-forget — never delays the page
+    }
+    return null;
   } catch {
     return null;
   }
@@ -357,7 +342,10 @@ export async function fetchTALocationDetails(
   taLocationId: string
 ): Promise<TripadvisorBusinessData | null> {
   const key = taApiKey();
-  const url = `${TA_API_BASE}/location/${taLocationId}/details?language=en&currency=USD&key=${key}`;
+  // taLocationId comes from TA API responses / Supabase rows, not directly
+  // from users — but encode it anyway so a poisoned row (e.g. "../x?y=")
+  // cannot rewrite the request path.
+  const url = `${TA_API_BASE}/location/${encodeURIComponent(taLocationId)}/details?language=en&currency=USD&key=${key}`;
   const res = await fetch(url, {
     headers: { accept: 'application/json' },
     next: { revalidate: 0 },
