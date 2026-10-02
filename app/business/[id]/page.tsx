@@ -390,6 +390,19 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
                     <span className="text-sm opacity-60">/100</span>
                   </span>
                 </div>
+                {place.confidence && (
+                  <div className="flex items-center justify-end gap-2">
+                    <span
+                      className="text-xs text-[#7A6B63]"
+                      title="Based on total review count and sample completeness — never changes the score itself"
+                    >
+                      Confidence
+                    </span>
+                    <span className="font-mono text-sm text-[#241C15] font-semibold">
+                      {place.confidence}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="font-mono text-2xl text-[#2F6F4E]">

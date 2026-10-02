@@ -103,20 +103,35 @@ describe('sentiment sets (rating 4.5, 100 reviews)', () => {
   it.each([
     [[5, 5, 5, 5, 5], 72.5],
     [[5, 5, 5, 5, 1], 68.9],
-    [[1, 1, 1, 1, 1], 69.1],
+    [[1, 1, 1, 1, 1], 66.9],
     [[4, 4, 4, 4, 4], 70.8],
   ])('sample %j → %s', (sample, expected) => {
     expect(score(4.5, 100, sample as number[]).finalScore).toBeCloseTo(expected as number, 5);
   });
 
-  it('KNOWN MODEL SMELL (pinned deliberately): a uniformly bad sample outscores a mostly-great one', () => {
-    // 1,1,1,1,1 → 69.1 beats 5,5,5,5,1 → 68.9 because the consistency
-    // component rewards uniformity even when it is uniformly bad. Pinned so
-    // the Phase-3 rebalance addresses it CONSCIOUSLY — when fixed, update
-    // this test and the methodology page together.
+  it('v1.2 FIX: a mostly-great sample now outscores a uniformly bad one', () => {
+    // Pre-v1.2 the consistency component rewarded uniformity even when it
+    // was uniformly bad (1,1,1,1,1 → 69.1 beat 5,5,5,5,1 → 68.9). The
+    // direction-aware consistency factor fixes the ordering.
     const uniformlyBad = score(4.5, 100, [1, 1, 1, 1, 1]).finalScore;
     const mostlyGreat = score(4.5, 100, [5, 5, 5, 5, 1]).finalScore;
-    expect(uniformlyBad).toBeGreaterThan(mostlyGreat);
+    expect(mostlyGreat).toBeGreaterThan(uniformlyBad);
+  });
+
+  it('v1.2: direction-aware consistency — uniformity only counts when the sample is good', () => {
+    expect(consistencyScore(reviews([1, 1, 1, 1, 1]))).toBe(0); // reliably bad ≠ reliable
+    expect(consistencyScore(reviews([3, 3, 3, 3, 3]))).toBe(0); // uniform mediocrity
+    expect(consistencyScore(reviews([4, 4, 4, 4, 4]))).toBeCloseTo(100, 5); // full credit from 4.0★
+    expect(consistencyScore(reviews([3, 4, 3, 4, 4]))).toBeCloseTo(40.4, 1); // partial fade
+  });
+
+  it('v1.2: sample-evidence weight is capped at 0.5 even when the sample covers all reviews', () => {
+    // 4.9★/18 reviews: uncapped weight would be √(5/18) ≈ 0.527; the cap
+    // holds blended sentiment at 92.5 (= 90×0.5 + 95×0.5) instead of 92.4.
+    const r = score(4.9, 18, [5, 5, 5, 5, 4]);
+    expect(r.componentScores.sentiment).toBeCloseTo(92.5, 5);
+    expect(r.componentScores.consistency).toBeCloseTo(74.2, 1);
+    expect(r.finalScore).toBeCloseTo(72.5, 5);
   });
 });
 

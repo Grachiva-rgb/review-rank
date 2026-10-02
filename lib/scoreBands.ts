@@ -39,3 +39,22 @@ export const RISING_STAR_MAX_REVIEWS = 300;
 export function isRisingStar(rating: number, reviewCount: number): boolean {
   return rating >= RISING_STAR_MIN_RATING && reviewCount < RISING_STAR_MAX_REVIEWS;
 }
+
+// ─── Confidence ───────────────────────────────────────────────────────────────
+// How much evidence backs the score — SEPARATE from the score itself and never
+// modifying it. Thresholds are data-driven from the live inventory's
+// review-count distribution (p25≈66, p50≈253, p75≈952 at introduction), so the
+// four levels split businesses roughly 47/21/19/13%. Rating-stability inputs
+// get added once historical snapshots exist (Phase 4).
+
+export type ConfidenceLevel = 'very_high' | 'high' | 'moderate' | 'low';
+
+export function getConfidence(
+  reviewCount: number,
+  sampleSize: number
+): { level: ConfidenceLevel; label: string } {
+  if (reviewCount >= 300 && sampleSize >= 5) return { level: 'very_high', label: 'Very High' };
+  if (reviewCount >= 100) return { level: 'high', label: 'High' };
+  if (reviewCount >= 25) return { level: 'moderate', label: 'Moderate' };
+  return { level: 'low', label: 'Low' };
+}

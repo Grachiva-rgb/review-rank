@@ -80,6 +80,13 @@ const BAYESIAN_CONFIDENCE = 15;
 // This prevents national chains with millions of reviews from dominating local.
 const VOLUME_LOG_CEILING = Math.log10(2001);
 
+/**
+ * Ceiling on the evidence weight of Google's ≤5-review sample (v1.2). Even
+ * when the sample covers every review a business has, it is still a
+ * relevance-selected sample — never let it fully replace the priors.
+ */
+export const SAMPLE_EVIDENCE_CAP = 0.5;
+
 // Component weights — must sum to 1.0
 const WEIGHTS = {
   bayesian: 0.55,
@@ -147,8 +154,14 @@ export function consistencyScore(reviews: BusinessReview[]): number {
   const variance = rated.reduce((s, r) => s + (r.rating - mean) ** 2, 0) / rated.length;
   const stddev = Math.sqrt(variance);
   // stddev 0.0 → 100, stddev 1.5+ → 0, linear in between.
-  const normalized = 1 - Math.min(stddev / 1.5, 1);
-  return clamp(normalized * 100, 0, 100);
+  const uniformity = 1 - Math.min(stddev / 1.5, 1);
+  // Direction awareness (v1.2): uniformity is only a virtue when the sample
+  // is actually good. Pure uniformity scored a 1,1,1,1,1 sample at 100 —
+  // "reliably bad" outranked "mostly great with one miss" (pinned in tests as
+  // a known smell until this fix). The factor fades uniformity's credit to 0
+  // as the sample mean drops from 4.0★ to 3.0★.
+  const direction = clamp(mean - 3.0, 0, 1);
+  return clamp(uniformity * direction * 100, 0, 100);
 }
 
 // ─── Helper 5 — Owner Response Rate ─────────────────────────────────────────
@@ -194,18 +207,25 @@ export function calculateReviewRankScore(input: BusinessScoreInput): BusinessSco
   // review should not outweigh years of 4.8★ performance.
   //
   // We blend the noisy 5-review components toward stable priors using
-  // sqrt(sample / total) as the evidence weight:
-  //   5 of  5  reviews → weight = 1.00 (sample covers all reviews)
+  // sqrt(sample / total) as the evidence weight, CAPPED at 0.5:
+  //   5 of  5  reviews → weight = 0.50 (capped — was 1.00)
   //   5 of 50  reviews → weight = 0.32
   //   5 of 500 reviews → weight = 0.10
   //   5 of 4000 reviews → weight = 0.035
+  //
+  // The cap (v1.2) bounds how much Google's relevance-selected sample can ever
+  // move a score: uncapped, one 1★ landing in a small business's sample swung
+  // the final score by up to 25 points (simulated across 4,557 real
+  // businesses); capped, the worst case is 12.5. Since the sample is chosen by
+  // relevance — not randomly and not by recency — it never deserves to be the
+  // majority of these components.
   //
   // Priors:
   //   Sentiment prior = overall aggregate rating mapped to 0–100 (same scale as sentimentScore)
   //   Consistency prior = 75 (slightly optimistic; high-rated businesses tend to be consistent)
   const sampleSize = reviews.length;
   const sampleEvidence = sampleSize > 0
-    ? Math.min(1.0, Math.sqrt(sampleSize / Math.max(totalReviewCount, sampleSize)))
+    ? Math.min(SAMPLE_EVIDENCE_CAP, Math.sqrt(sampleSize / Math.max(totalReviewCount, sampleSize)))
     : 0;
   const sentimentPrior = clamp(((rating - 3.0) / 2.0) * 100, 0, 100);
   const blendedSentiment   = sentiment   * sampleEvidence + sentimentPrior * (1 - sampleEvidence);

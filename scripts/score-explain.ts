@@ -18,7 +18,7 @@ import {
   consistencyScore,
   BusinessReview,
 } from '../lib/reviewRankScoring';
-import { getScoreBand } from '../lib/scoreBands';
+import { getScoreBand, getConfidence } from '../lib/scoreBands';
 import { getTrustTierFromRRS, getTrustTierLabel } from '../lib/ranking';
 
 const [ratingArg, countArg, sampleArg] = process.argv.slice(2);
@@ -64,7 +64,7 @@ const rawBayes = bayesianRating(rating, reviewCount);
 const rawSentiment = sentimentScore(reviews);
 const rawConsistency = consistencyScore(reviews);
 const evidence = sample.length > 0
-  ? Math.min(1, Math.sqrt(sample.length / Math.max(reviewCount, sample.length)))
+  ? Math.min(0.5, Math.sqrt(sample.length / Math.max(reviewCount, sample.length)))
   : 0;
 const tier = getTrustTierFromRRS(result.finalScore, rating, reviewCount);
 
@@ -78,12 +78,13 @@ Bayesian rating        ${f(rawBayes)}  → 0–100: ${f(result.componentScores.b
 Volume score                      → 0–100: ${f(result.componentScores.volume)}   × 20%
 Sentiment (raw)        ${f(rawSentiment)}
 Consistency (raw)      ${f(rawConsistency)}
-Evidence weight        ${f(evidence)}  = min(1, √(${sample.length}/${Math.max(reviewCount, sample.length)}))
+Evidence weight        ${f(evidence)}  = min(0.5, √(${sample.length}/${Math.max(reviewCount, sample.length)}))
 Sentiment (blended)               → 0–100: ${f(result.componentScores.sentiment)}   × 15%
 Consistency (blended)             → 0–100: ${f(result.componentScores.consistency)}   × 10%
 
 Final ReviewRank Score ${String(result.finalScore).padStart(7)} / 100
 Band label             ${getScoreBand(result.finalScore).label}
+Confidence             ${getConfidence(reviewCount, sample.length).label}
 Tier badge             ${getTrustTierLabel(tier) || '(none — gates not met)'}
 
 Explanations:

@@ -114,6 +114,11 @@ function BusinessColumn({
         <SmartScoreBadge score={place.review_rank_score} size="lg" />
         <div className="space-y-0.5">
           <p className="text-xs text-[#7A6B63] font-medium">{place.rank_label}</p>
+          {place.confidence && (
+            <p className="text-[10px] uppercase tracking-widest text-[#9A8C85]">
+              Confidence: {place.confidence}
+            </p>
+          )}
           <TrendPill signal={place.trend_signal} label={place.trend_label} />
         </div>
       </div>
