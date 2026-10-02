@@ -71,6 +71,12 @@ describe('boundary: review counts (rating 4.5, no sample)', () => {
     [2000, 79.9], // volume saturates exactly at 2,000
     [2001, 79.9], // …and clamps beyond it
     [1_000_000, 80.0],
+    // confidence-threshold edges and a deep-volume point
+    [24, 65.3],
+    [25, 65.5],
+    [149, 72.4],
+    [150, 72.5],
+    [10_000, 80.0],
   ])('%s reviews → %s', (count, expected) => {
     expect(score(4.5, count as number).finalScore).toBeCloseTo(expected as number, 5);
   });
@@ -105,6 +111,7 @@ describe('sentiment sets (rating 4.5, 100 reviews)', () => {
     [[5, 5, 5, 5, 1], 68.9],
     [[1, 1, 1, 1, 1], 66.9],
     [[4, 4, 4, 4, 4], 70.8],
+    [[5, 4, 3, 2, 1], 66.9], // full spread: high stddev zeroes consistency
   ])('sample %j → %s', (sample, expected) => {
     expect(score(4.5, 100, sample as number[]).finalScore).toBeCloseTo(expected as number, 5);
   });
@@ -169,5 +176,42 @@ describe('labels', () => {
   it('getRankLabel delegates to the central band map', () => {
     expect(getRankLabel(82.4)).toBe('Elite');
     expect(getRankLabel(34.9)).toBe('Limited Reputation');
+  });
+});
+
+describe('sample-size progression (4.5★/100, all-5★ samples)', () => {
+  it.each([
+    [0, 71.1],
+    [1, 71.4],
+    [2, 72.0],
+    [3, 72.1],
+    [4, 72.3],
+    [5, 72.5],
+  ])('sample of %s → %s', (k, expected) => {
+    expect(score(4.5, 100, Array(k as number).fill(5)).finalScore).toBeCloseTo(expected as number, 5);
+  });
+});
+
+describe('ranking independence guard (commercial attributes cannot be inputs)', () => {
+  it('the scorer input type has no commercial fields', () => {
+    calculateReviewRankScore({
+      businessId: 'x',
+      rating: 4.5,
+      totalReviewCount: 100,
+      reviews: [],
+      // @ts-expect-error — partner/commercial attributes must never become scorer inputs
+      isPartner: true,
+    });
+    calculateReviewRankScore({
+      businessId: 'x',
+      rating: 4.5,
+      totalReviewCount: 100,
+      reviews: [],
+      // @ts-expect-error — paid status must never become a scorer input
+      hasPaidReport: true,
+    });
+    // If either @ts-expect-error above stops erroring, someone added a
+    // commercial field to BusinessScoreInput — typecheck fails this file.
+    expect(true).toBe(true);
   });
 });

@@ -13,8 +13,6 @@ import GoogleMapsAttribution from '@/components/GoogleMapsAttribution';
 import {
   detectCategory,
   getTrustTierFromRRS,
-  getTrustTierLabel,
-  getTrustTierStyle,
   getBusinessInsights,
 } from '@/lib/ranking';
 
@@ -117,8 +115,6 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
   // Detect category from the search query that led here (passed as ?cat=)
   const category = detectCategory(cat || '');
   const tier = getTrustTierFromRRS(place.review_rank_score, place.rating, place.user_ratings_total);
-  const tierLabel = getTrustTierLabel(tier);
-  const tierStyle = getTrustTierStyle(tier);
   const insights = getBusinessInsights(
     place.rating,
     place.user_ratings_total,
@@ -191,16 +187,10 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
                 <h1 className="font-display text-3xl sm:text-4xl text-[#241C15] leading-tight">
                   {place.name}
                 </h1>
-                {tier && (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${tierStyle}`}
-                  >
-                    {tier === 'highly_trusted' && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#2F6F4E]" />
-                    )}
-                    {tierLabel}
-                  </span>
-                )}
+                {/* Tier badge retired (UX consolidation): the page shows the
+                    score band and Confidence; a third overlapping label read
+                    as a contradiction when band and tier diverged. Tier logic
+                    remains for the narrative and analytics. */}
               </div>
 
               <div className="flex items-center gap-3 flex-wrap mb-3">

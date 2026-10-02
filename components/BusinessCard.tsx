@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Place } from '@/lib/types';
-import { BusinessCategory, getTrustTierFromRRS, getTrustTierLabel, getTrustTierStyle, getRankingExplanation } from '@/lib/ranking';
+import { BusinessCategory, getTrustTierFromRRS, getRankingExplanation } from '@/lib/ranking';
 import { isRisingStar } from '@/lib/scoreBands';
 import StarRating from './StarRating';
 import SmartScoreBadge from './SmartScoreBadge';
@@ -33,9 +33,9 @@ function PriceLevel({ level }: { level?: number }) {
 
 export default function BusinessCard({ place, rank, category = 'general' }: BusinessCardProps) {
   const rankColor = RANK_COLORS[rank] ?? 'text-[#C2C2C2]';
+  // Tier still gates the quote CTA (evidence floor for lead-gen) and feeds
+  // the narrative generator — it just no longer renders as a badge.
   const tier = getTrustTierFromRRS(place.review_rank_score, place.rating, place.user_ratings_total);
-  const tierLabel = getTrustTierLabel(tier);
-  const tierStyle = getTrustTierStyle(tier);
   // Prefer the dynamic score-derived explanations (driver-based) if available;
   // fall back to category-generic language for older cached records.
   const explanations = place.score_explanations?.length
@@ -67,24 +67,18 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Name + tier badge */}
+        {/* Name + rising-star flag */}
         <div className="flex items-start gap-2 flex-wrap mb-1">
           <Link href={detailHref}>
             <h3 className="font-display text-lg font-semibold leading-snug text-[#241C15] group-hover:text-[#8B5E3C] transition-colors">
               {place.name}
             </h3>
           </Link>
-          {tier && (
-            <span
-              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest flex-shrink-0 mt-0.5 ${tierStyle}`}
-            >
-              {tier === 'highly_trusted' && (
-                <span className="h-1 w-1 rounded-full bg-[#2F6F4E] opacity-80" />
-              )}
-              {tierLabel}
-            </span>
-          )}
-          {risingStar && !tier && (
+          {/* Tier badge retired (UX consolidation): the card already shows the
+              score band (badge label) and Confidence — a third classification
+              overlapping both added noise, not information. The tier logic
+              remains in lib/ranking for the narrative generator. */}
+          {risingStar && (
             <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 flex-shrink-0 mt-0.5">
               Rising Star
             </span>
