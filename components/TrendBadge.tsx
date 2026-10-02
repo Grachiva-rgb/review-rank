@@ -34,7 +34,7 @@ export default function TrendBadge({ signal, label, size = 'sm' }: TrendBadgePro
   return (
     <span
       className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wider leading-tight ${textSize} ${style}`}
-      title="Based on recent review sentiment vs. overall rating"
+      title="Based on the sentiment of Google's review sample vs. overall rating"
     >
       <span>{icon}</span>
       <span className="hidden sm:inline">{label}</span>

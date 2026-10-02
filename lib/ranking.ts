@@ -37,14 +37,6 @@ export function getScoreBgColor(score: number): string {
   return 'bg-red-50 border-red-200';
 }
 
-export function getScoreLabel(score: number): string {
-  if (score >= 4.5) return 'Highly Trusted';
-  if (score >= 3) return 'Well Trusted';
-  if (score >= 1.8) return 'Trusted';
-  if (score >= 1) return 'Established';
-  return 'Limited Data';
-}
-
 // ─── Trust Tier ─────────────────────────────────────────────────────────────
 // Modelled after tiered trust systems used by Angi (Top Pro), Healthgrades
 // (Most Recommended), and Consumer Reports (Recommended) — clear, earned tiers.
@@ -66,24 +58,6 @@ export function getTrustTierFromRRS(
   if (reviewRankScore >= 50 && rating >= 4.2) return 'trusted';
   // Established: meaningful track record at acceptable quality
   if (reviewRankScore >= 35 && rating >= 4.0 && reviewCount >= 50) return 'established';
-  return null;
-}
-
-/**
- * Legacy tier from the old Smart Score (0–7.5 scale). Retained for callers
- * that still pass smart_score; prefer getTrustTierFromRRS for new code.
- */
-export function getTrustTier(
-  score: number,
-  rating: number,
-  reviewCount: number
-): TrustTier {
-  // Highly Trusted: 4.5★+ with strong volume (≈ 4.5★ × 150+ reviews)
-  if (score >= 4.5 && rating >= 4.5 && reviewCount >= 150) return 'highly_trusted';
-  // Trusted: solid — 4.2★+ with at least some track record
-  if (score >= 2.5 && rating >= 4.2) return 'trusted';
-  // Established: 4.0★+ with enough reviews to be meaningful
-  if (reviewCount >= 50 && rating >= 4.0) return 'established';
   return null;
 }
 
@@ -153,50 +127,6 @@ export function detectCategory(query: string): BusinessCategory {
 // ─── Trust Summary ───────────────────────────────────────────────────────────
 // Short plain-English trust sentence for business cards.
 // Category-specific language based on what customers value in each service type.
-
-const CATEGORY_TERMS: Record<
-  BusinessCategory,
-  { group: string; value: string }
-> = {
-  automotive: { group: 'customers', value: 'honest work and fair pricing' },
-  plumbing:   { group: 'homeowners', value: 'reliable service and clear pricing' },
-  hvac:       { group: 'homeowners', value: 'quality installs and responsive service' },
-  electrical: { group: 'customers', value: 'safe, licensed, reliable work' },
-  medical:    { group: 'patients', value: 'attentive care and professionalism' },
-  legal:      { group: 'clients', value: 'clear communication and professional counsel' },
-  roofing:    { group: 'homeowners', value: 'quality workmanship and follow-through' },
-  home_services: { group: 'homeowners', value: 'reliable work and fair pricing' },
-  wellness:   { group: 'clients', value: 'consistent quality and friendly service' },
-  food:        { group: 'customers', value: 'consistent quality and experience' },
-  hospitality: { group: 'travelers', value: 'exceptional stays and memorable experiences' },
-  general:     { group: 'customers', value: 'consistent service quality' },
-};
-
-export function getTrustSummary(
-  rating: number,
-  reviewCount: number,
-  category: BusinessCategory = 'general'
-): string {
-  const terms = CATEGORY_TERMS[category];
-  const hi = rating >= 4.5;
-  const ok = rating >= 4.2;
-  const highVol = reviewCount >= 500;
-  const midVol = reviewCount >= 100;
-
-  if (hi && highVol)
-    return `Consistently praised for ${terms.value} across ${reviewCount.toLocaleString()} ${terms.group}.`;
-  if (hi && midVol)
-    return `Highly regarded for ${terms.value} by ${reviewCount.toLocaleString()} ${terms.group}.`;
-  if (hi)
-    return `Strong early signals — ${rating.toFixed(1)}★ from ${reviewCount} ${terms.group}.`;
-  if (ok && highVol)
-    return `Well-established with ${reviewCount.toLocaleString()} ${terms.group} and a solid track record.`;
-  if (ok && midVol)
-    return `Solid reputation built across ${reviewCount.toLocaleString()} ${terms.group}.`;
-  if (midVol)
-    return `${reviewCount.toLocaleString()} ${terms.group} have reviewed this business (${rating.toFixed(1)}★).`;
-  return `Only ${reviewCount} reviews at ${rating.toFixed(1)}★ — not enough history to assess reliability with confidence.`;
-}
 
 // ─── Card Ranking Explanation ────────────────────────────────────────────────
 // One-line explanation shown on business cards describing *why* the business
@@ -297,18 +227,18 @@ export interface BusinessInsights {
 export function getBusinessInsights(
   rating: number,
   reviewCount: number,
-  category: BusinessCategory
+  category: BusinessCategory,
+  reviewRankScore: number
 ): BusinessInsights {
   const hi = rating >= 4.5;
   const ok = rating >= 4.2;
   const highVol = reviewCount >= 500;
   const midVol = reviewCount >= 100;
 
-  const tier = getTrustTier(
-    calculateSmartScore(rating, reviewCount),
-    rating,
-    reviewCount
-  );
+  // Same tier source as the page header badge (getTrustTierFromRRS), so the
+  // narrative can never assert a different tier than the badge. The legacy
+  // Smart-Score-based getTrustTier produced exactly that contradiction.
+  const tier = getTrustTierFromRRS(reviewRankScore, rating, reviewCount);
 
   const trustSummary =
     tier === 'highly_trusted'
@@ -325,9 +255,9 @@ export function getBusinessInsights(
   > = {
     automotive: {
       praise: [
-        'Customers frequently cite honest diagnostics, fair pricing, and work completed on time.',
-        'Reviewers highlight transparent estimates and mechanics who explain issues clearly.',
-        'Early reviewers note attentive service and accurate repair timelines.',
+        'Reviews in this category frequently cite honest diagnostics, fair pricing, and work completed on time.',
+        'Reviews in this category often highlight transparent estimates and mechanics who explain issues clearly.',
+        'Early reviews in this category often note attentive service and accurate repair timelines.',
       ],
       considerations: [
         'Some customers mention waits during peak hours — calling ahead is recommended.',
@@ -336,15 +266,15 @@ export function getBusinessInsights(
       ],
       bestFor: [
         'Anyone who values honest pricing and clear communication from a mechanic.',
-        'Drivers looking for a reliable shop with a solid track record.',
+        'Drivers looking for a well-rated local shop.',
         'Those seeking a local alternative to dealership service.',
       ],
     },
     plumbing: {
       praise: [
-        'Customers consistently cite prompt response times and transparent pricing before work begins.',
-        'Reviewers appreciate punctual arrivals and clean, professional work.',
-        'Early customers highlight reliable diagnosis and fair estimates.',
+        'Reviews in this category consistently cite prompt response times and transparent pricing before work begins.',
+        'Reviews in this category often praise punctual arrivals and clean, professional work.',
+        'Early reviews in this category often highlight reliable diagnosis and fair estimates.',
       ],
       considerations: [
         'Emergency availability may vary — confirm availability before a crisis arises.',
@@ -354,14 +284,14 @@ export function getBusinessInsights(
       bestFor: [
         'Homeowners who need a reliable plumber with upfront pricing.',
         'Anyone dealing with urgent plumbing issues and needing fast response.',
-        'Those seeking a local plumber with a proven track record.',
+        'Those willing to weigh a strong rating against a shorter review history.',
       ],
     },
     hvac: {
       praise: [
-        'Customers frequently praise quality installations, energy-efficient recommendations, and responsive follow-up.',
-        'Reviewers highlight professional technicians who explain system options clearly.',
-        'Early reviews note thorough diagnostics and fair service quotes.',
+        'Reviews in this category frequently praise quality installations, energy-efficient recommendations, and responsive follow-up.',
+        'Reviews in this category often highlight professional technicians who explain system options clearly.',
+        'Early reviews in this category often note thorough diagnostics and fair service quotes.',
       ],
       considerations: [
         'Scheduling during peak season (summer/winter) can take time — book ahead.',
@@ -376,9 +306,9 @@ export function getBusinessInsights(
     },
     electrical: {
       praise: [
-        'Customers consistently cite licensed, safe work with clear pricing and code compliance.',
-        'Reviewers appreciate electricians who explain the work and provide clear timelines.',
-        'Early reviews highlight safety-conscious work and professional conduct.',
+        'Reviews in this category consistently cite licensed, safe work with clear pricing and code compliance.',
+        'Reviews in this category often praise electricians who explain the work and provide clear timelines.',
+        'Early reviews in this category often highlight safety-conscious work and professional conduct.',
       ],
       considerations: [
         'Complex or large-scale jobs may require scheduling well in advance.',
@@ -393,9 +323,9 @@ export function getBusinessInsights(
     },
     medical: {
       praise: [
-        'Patients frequently cite attentive care, clear communication, and a welcoming, professional environment.',
-        'Reviewers highlight knowledgeable practitioners who take time to explain treatment plans.',
-        'Early patients note gentle, thorough care and friendly staff.',
+        'Reviews in this category frequently cite attentive care, clear communication, and a welcoming, professional environment.',
+        'Reviews in this category often highlight knowledgeable practitioners who take time to explain treatment plans.',
+        'Early reviews in this category often note gentle, thorough care and friendly staff.',
       ],
       considerations: [
         'Wait times can increase during busy periods — scheduling ahead is recommended.',
@@ -404,15 +334,15 @@ export function getBusinessInsights(
       ],
       bestFor: [
         'Patients seeking attentive, professional care with good communication.',
-        'Anyone looking for a provider with a consistent track record of positive outcomes.',
+        'Anyone looking for a well-rated provider in this specialty.',
         'Those who value a welcoming, low-stress environment for appointments.',
       ],
     },
     legal: {
       praise: [
-        'Clients consistently cite professional communication, timely responses, and clear counsel.',
-        'Reviewers appreciate attorneys who explain legal options in plain language.',
-        'Early clients note a responsive team and transparent billing.',
+        'Reviews in this category consistently cite professional communication, timely responses, and clear counsel.',
+        'Reviews in this category often praise attorneys who explain legal options in plain language.',
+        'Early reviews in this category often note a responsive team and transparent billing.',
       ],
       considerations: [
         'Complex cases may involve longer timelines — set realistic expectations early.',
@@ -427,9 +357,9 @@ export function getBusinessInsights(
     },
     roofing: {
       praise: [
-        'Customers frequently cite quality materials, workmanlike installation, and thorough cleanup.',
-        'Reviewers highlight crews that arrive on time and communicate project progress.',
-        'Early customers note professional inspections and fair, itemized quotes.',
+        'Reviews in this category frequently cite quality materials, workmanlike installation, and thorough cleanup.',
+        'Reviews in this category often highlight crews that arrive on time and communicate project progress.',
+        'Early reviews in this category often note professional inspections and fair, itemized quotes.',
       ],
       considerations: [
         'Peak storm season can affect scheduling — plan major projects in advance.',
@@ -444,9 +374,9 @@ export function getBusinessInsights(
     },
     home_services: {
       praise: [
-        'Customers consistently cite reliable scheduling, quality work, and transparent pricing.',
-        'Reviewers appreciate professionals who show up on time and leave the work area clean.',
-        'Early reviews note thorough consultations and fair, detailed estimates.',
+        'Reviews in this category consistently cite reliable scheduling, quality work, and transparent pricing.',
+        'Reviews in this category often praise professionals who show up on time and leave the work area clean.',
+        'Early reviews in this category often note thorough consultations and fair, detailed estimates.',
       ],
       considerations: [
         'Booking during busy seasons may require extra lead time.',
@@ -461,9 +391,9 @@ export function getBusinessInsights(
     },
     wellness: {
       praise: [
-        'Clients consistently cite skilled practitioners, welcoming environments, and consistent results.',
-        'Reviewers highlight friendly staff, attention to detail, and a relaxing experience.',
-        'Early clients note clean facilities and professionals who listen to preferences.',
+        'Reviews in this category consistently cite skilled practitioners, welcoming environments, and consistent results.',
+        'Reviews in this category often highlight friendly staff, attention to detail, and a relaxing experience.',
+        'Early reviews in this category often note clean facilities and professionals who listen to preferences.',
       ],
       considerations: [
         'Popular appointment slots can fill quickly — advance booking is recommended.',
@@ -473,14 +403,14 @@ export function getBusinessInsights(
       bestFor: [
         'Anyone seeking a consistent, high-quality wellness or beauty experience.',
         'Clients who value skilled practitioners in a professional, welcoming setting.',
-        'Those looking for a trusted local option with a strong word-of-mouth reputation.',
+        'Those open to a newer option whose early reviews are positive.',
       ],
     },
     food: {
       praise: [
-        'Customers consistently praise quality food, attentive service, and a welcoming experience.',
-        'Reviewers highlight consistency across visits and a menu that delivers on expectations.',
-        'Early visitors note fresh ingredients and friendly staff.',
+        'Reviews in this category consistently praise quality food, attentive service, and a welcoming experience.',
+        'Reviews in this category often highlight consistency across visits and a menu that delivers on expectations.',
+        'Early reviews in this category often note fresh ingredients and friendly staff.',
       ],
       considerations: [
         'Popular spots can have longer waits during peak dining hours.',
@@ -489,15 +419,15 @@ export function getBusinessInsights(
       ],
       bestFor: [
         'Anyone looking for a reliable dining experience with consistent quality.',
-        'Diners who want to avoid disappointing meals by choosing proven local spots.',
+        'Diners who prefer places with consistently positive ratings.',
         'Those seeking a well-reviewed option for a meal worth the trip.',
       ],
     },
     hospitality: {
       praise: [
-        'Travelers consistently praise the quality of accommodations, attentive staff, and memorable experiences.',
-        'Guests highlight comfortable surroundings, helpful service, and value for the stay.',
-        'Early visitors note a welcoming atmosphere and attention to detail.',
+        'Reviews in this category consistently praise the quality of accommodations, attentive staff, and memorable experiences.',
+        'Reviews in this category often highlight comfortable surroundings, helpful service, and value for the stay.',
+        'Early reviews in this category often note a welcoming atmosphere and attention to detail.',
       ],
       considerations: [
         'Peak seasons and special events can affect availability and pricing — booking early is recommended.',
@@ -512,9 +442,9 @@ export function getBusinessInsights(
     },
     general: {
       praise: [
-        'Customers consistently cite quality service, professional conduct, and reliable results.',
-        'Reviewers appreciate responsive communication and work delivered as promised.',
-        'Early reviews reflect a team building a positive reputation.',
+        'Reviews in this category consistently cite quality service, professional conduct, and reliable results.',
+        'Reviews in this category often praise responsive communication and work delivered as promised.',
+        'Early reviews in this category often reflect a team building a positive reputation.',
       ],
       considerations: [
         'Scheduling availability may vary — confirming in advance is always recommended.',

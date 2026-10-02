@@ -27,7 +27,7 @@ const FILTERS: { value: SortFilter; label: string; title: string }[] = [
   {
     value: 'rising_stars',
     label: 'Rising Stars',
-    title: 'High ratings with under 500 reviews — strong early signals',
+    title: 'High ratings with under 300 reviews — strong early signals',
   },
 ];
 
@@ -61,9 +61,10 @@ export default function FilterBar({ currentFilter, onFilterChange, count }: Filt
       {/* Contextual explanation — adapts to active sort */}
       {currentFilter === 'smart_score' && (
         <p className="text-xs text-[#7A6B63] bg-[#FAF7F0] border border-[#EDE8E3] rounded-lg px-3 py-2">
-          <span className="font-medium text-[#5A4A3F]">Most Trusted</span> ranks by Smart Score —
-          a formula that balances star rating with review volume so that a business with 4.7★ across
-          2,000 reviews outranks one with 4.9★ across 5 reviews.
+          <span className="font-medium text-[#5A4A3F]">Most Trusted</span> ranks by ReviewRank Score —
+          a weighted blend of Bayesian-adjusted rating, review volume, sampled review sentiment,
+          and rating consistency — so a business with 4.7★ across 2,000 reviews outranks one
+          with 4.9★ across 5 reviews.
         </p>
       )}
       {currentFilter === 'rating' && (
@@ -90,7 +91,7 @@ export default function FilterBar({ currentFilter, onFilterChange, count }: Filt
       {currentFilter === 'rising_stars' && (
         <p className="text-xs text-[#7A6B63] bg-[#FAF7F0] border border-[#EDE8E3] rounded-lg px-3 py-2">
           <span className="font-medium text-[#5A4A3F]">Rising Stars</span> surfaces businesses with
-          high ratings but fewer than 500 reviews — strong early signals before they become
+          high ratings but fewer than 300 reviews — strong early signals before they become
           widely known.
         </p>
       )}

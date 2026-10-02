@@ -46,7 +46,6 @@ export function computeMultiSourceScore(
 
   if (!ta || !isHospitality) {
     // No TA data or non-hospitality: single-source pass-through
-    const confidence: ConfidenceLevel = googleCount > 200 ? 'medium' : 'low';
     return {
       finalScore: existingRRScore,
       confidence: 'single_source',

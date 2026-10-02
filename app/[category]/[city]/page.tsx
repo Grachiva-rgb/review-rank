@@ -206,9 +206,10 @@ export default async function CategoryCityPage({ params }: PageProps) {
         <div className="mt-12 rounded-2xl border border-[#EDE8E3] bg-white p-6">
           <h2 className="font-display text-xl text-[#241C15] mb-2">How we rank {cat.plural.toLowerCase()}</h2>
           <p className="text-sm text-[#5A4A3F] leading-relaxed mb-3">
-            The ReviewRank Score combines star rating with review volume into a single trust score.
-            A 4.7★ business with 800 reviews ranks higher than a 5.0★ business with 4 reviews —
-            because volume gives us confidence the rating is real.
+            The ReviewRank Score blends a Bayesian-adjusted rating, review volume, sampled review
+            sentiment, and rating consistency into a single 0–100 score. A 4.7★ business with 800
+            reviews ranks higher than a 5.0★ business with 4 reviews — volume gives us confidence
+            the rating is real.
           </p>
           <Link href="/methodology" className="text-sm text-[#8B5E3C] hover:text-[#6B4A2F]">
             Read the full methodology →

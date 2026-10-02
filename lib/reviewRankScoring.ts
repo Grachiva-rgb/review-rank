@@ -5,13 +5,14 @@
  * reputation without claiming to replicate Google or Yelp algorithms.
  *
  * Weighting adapted to what we can actually measure from the Google Places API
- * (which returns only the aggregate rating, review count, and up to 5 of the
- * most recent reviews per business). Phases unlock more signals over time:
+ * (which returns only the aggregate rating, review count, and up to 5 reviews
+ * per business, selected and SORTED BY RELEVANCE by Google — the API offers no
+ * chronological ordering, so none of these signals are truly "recent"). Phases unlock more signals over time:
  *
  *   Phase 1 (current — ships today):
  *     55% Bayesian weighted rating      (quality, shrinkage-corrected)
  *     20% Review volume (log-scaled)    (confidence, track-record depth)
- *     15% Recent-review sentiment       (trend, last-mile reputation)
+ *     15% Sampled-review sentiment      (from Google's relevance-ranked sample)
  *     10% Rating consistency (stddev)   (reliability of experience)
  *
  *   Phase 2 (unlocks after we track review history in our own DB):
@@ -26,6 +27,8 @@
  *
  * All functions are pure, deterministic, and safe for Next.js Server Components.
  */
+
+import { getScoreBand } from './scoreBands';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +45,7 @@ export interface BusinessScoreInput {
   businessId: string;
   rating: number;                 // aggregate rating (0–5)
   totalReviewCount: number;       // full review count across platform
-  reviews: BusinessReview[];      // up to ~5 most recent reviews available
+  reviews: BusinessReview[];      // Google's relevance-ranked sample, up to 5 reviews
   competitorAverageReviews?: number;
   platformAverageRating?: number; // default 4.2 for Google
   minimumReviewThreshold?: number;
@@ -113,24 +116,24 @@ export function volumeScore(reviewCount: number): number {
   return clamp(normalized * 100, 0, 100);
 }
 
-// ─── Helper 3 — Recent-Review Sentiment ──────────────────────────────────────
-// Uses the rating on each recent review as a fast, reliable sentiment proxy.
+// ─── Helper 3 — Sampled-Review Sentiment ──────────────────────────────────────
+// Uses the rating on each sampled review as a fast, reliable sentiment proxy.
 // This is intentionally simple for MVP — no external NLP calls needed, and
 // user-assigned ratings correlate strongly with sentiment in practice.
 //
 // This captures *trend* that the overall aggregate rating hides: a business
-// with 4.6★ overall but three recent 2★ reviews is sliding; this surfaces it.
+// with 4.6★ overall but three 2★ reviews in the sample is sliding; this surfaces it.
 export function sentimentScore(reviews: BusinessReview[]): number {
   if (!reviews || reviews.length === 0) return 50; // neutral prior
   const rated = reviews.filter((r) => r.rating && r.rating > 0);
   if (rated.length === 0) return 50;
   const avg = rated.reduce((s, r) => s + r.rating, 0) / rated.length;
-  // Map 3.0 → 0 and 5.0 → 100 so only genuinely positive recent reviews score.
+  // Map 3.0 → 0 and 5.0 → 100 so only genuinely positive sampled reviews score.
   return clamp(((avg - 3.0) / 2.0) * 100, 0, 100);
 }
 
 // ─── Helper 4 — Rating Consistency ───────────────────────────────────────────
-// Stddev of recent review ratings. Low stddev = reliable experience. High
+// Stddev of the sampled review ratings. Low stddev = reliable experience. High
 // stddev (mix of 1★ and 5★) = polarizing, less predictable, a yellow flag
 // that aggregate rating hides.
 //
@@ -185,9 +188,9 @@ export function calculateReviewRankScore(input: BusinessScoreInput): BusinessSco
   const consistency = consistencyScore(reviews);
 
   // ── Evidence blending ───────────────────────────────────────────────────────
-  // Sentiment and consistency are computed from at most 5 recent reviews
+  // Sentiment and consistency are computed from Google's relevance-ranked sample of at most 5 reviews
   // (the Google Places API limit). For a business with thousands of reviews,
-  // those 5 samples represent < 0.1% of its track record — a single bad recent
+  // those 5 samples represent < 0.1% of its track record — a single bad sampled
   // review should not outweigh years of 4.8★ performance.
   //
   // We blend the noisy 5-review components toward stable priors using
@@ -247,11 +250,8 @@ export function calculateReviewRankScore(input: BusinessScoreInput): BusinessSco
 // ─── Rank label (tier) ───────────────────────────────────────────────────────
 
 export function getRankLabel(score: number): string {
-  if (score >= 80) return 'Elite';
-  if (score >= 65) return 'Highly Trusted';
-  if (score >= 50) return 'Trusted';
-  if (score >= 35) return 'Established';
-  return 'Limited Reputation';
+  // Single source of truth for band thresholds/labels — see lib/scoreBands.
+  return getScoreBand(score).label;
 }
 
 // ─── Explanation builder ─────────────────────────────────────────────────────
@@ -294,28 +294,28 @@ function buildExplanations(a: ExplainArgs): string[] {
   // Sentiment trend
   if (a.reviewsAvailable >= a.minimumReviewThreshold) {
     if (a.sentiment >= 80) {
-      out.push(`Recent reviews are trending strongly positive.`);
+      out.push(`Google's review sample skews strongly positive.`);
     } else if (a.sentiment <= 40) {
-      out.push(`Recent negative sentiment lowered the score — check the latest reviews.`);
+      out.push(`Negative reviews in Google's sample lowered the score — check the reviews.`);
     }
   }
 
   // Consistency
   if (a.consistency >= 85 && a.reviewsAvailable >= a.minimumReviewThreshold) {
-    out.push(`Reviews are highly consistent — customers get a reliable experience.`);
+    out.push(`Ratings in Google's review sample are tightly clustered.`);
   } else if (a.consistency <= 50 && a.reviewsAvailable >= a.minimumReviewThreshold) {
-    out.push(`Mixed recent ratings — the customer experience appears inconsistent.`);
+    out.push(`Mixed ratings in Google's review sample — experiences may vary.`);
   }
 
   return out;
 }
 
 // ─── Trend Signal ─────────────────────────────────────────────────────────────
-// A proxy trend derived from the difference between recent-review sentiment and
+// A proxy derived from the difference between sampled-review sentiment and
 // the long-run Bayesian-adjusted rating. No historical data required.
 //
-// sentiment >> bayesian → recent reviews are better than overall average → "above_average"
-// sentiment << bayesian → recent reviews are worse than overall average → "below_average"
+// sentiment >> bayesian → sampled reviews are better than overall average → "above_average"
+// sentiment << bayesian → sampled reviews are worse than overall average → "below_average"
 // otherwise → "stable"
 //
 // Intentionally labelled as "above/below average" (not "trending up/down") because
@@ -338,8 +338,8 @@ export function computeTrendSignal(
 
 export function getTrendLabel(signal: TrendSignal): string {
   switch (signal) {
-    case 'above_average':    return 'Recent reviews above avg';
-    case 'below_average':    return 'Recent reviews below avg';
+    case 'above_average':    return 'Review sample above avg';
+    case 'below_average':    return 'Review sample below avg';
     case 'stable':           return 'Stable';
     case 'insufficient_data': return 'Not enough data';
     case 'fast_rising':      return 'Fast Rising';
@@ -380,7 +380,7 @@ export function computeMultiSourceTrend(
   }
 
   if (base === 'above_average' || base === 'stable') {
-    drivers.unshift('Recent Google reviews trending positive');
+    drivers.unshift('Google review sample skews positive');
   }
 
   const diff = reviewCount >= 5 ? sentimentComp - bayesianComp : 0;
@@ -426,5 +426,5 @@ function round1(n: number): number {
 // // result.finalScore ≈ 73.4 — "Highly Trusted"
 // // result.explanations:
 // //   "Strong 4.7★ rating across 412 reviews — consistent quality at scale."
-// //   "Recent reviews are trending strongly positive."
+// //   "Google's review sample skews strongly positive."
 // //   "Reviews are highly consistent — customers get a reliable experience."
