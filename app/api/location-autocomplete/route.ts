@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit, clientIp } from '@/lib/ratelimit';
 import { isSupabaseConfigured, sbSelect, sbUpsert } from '@/lib/supabase';
+import { geocodeZip } from '@/lib/locationIntent';
 
 interface Suggestion {
   label: string;
@@ -27,11 +28,14 @@ const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 const AUTOCOMPLETE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
- * Cache key prefix. Bumped from `autocomplete:` when migrating to the new API so
- * that any entry written while the legacy endpoint was misconfigured is not
- * served for the rest of its 30-day TTL.
+ * Cache key prefix. Bumped on contract changes so stale entries are not served
+ * for the rest of their 30-day TTL:
+ *   - `autocomplete:`  → `autocomplete2:` legacy-API migration
+ *   - `autocomplete2:` → `autocomplete3:` zip-code fix — v2 entries hold street
+ *     addresses for 5-digit inputs (Google read "44236" as a house number near
+ *     the Ashburn serverless region and the old fallback served them).
  */
-const CACHE_PREFIX = 'autocomplete2:';
+const CACHE_PREFIX = 'autocomplete3:';
 
 /**
  * Minimum prefix length. Two-character prefixes match half the country, so the
@@ -42,14 +46,15 @@ const MIN_QUERY_LENGTH = 3;
 /**
  * Prediction types we want for a "City or zip code" field.
  *
- * Deliberately applied to the RESPONSE rather than sent as
- * `includedPrimaryTypes`. The request-side filter accepts either the
- * `(cities)`/`(regions)` collections or explicit types, but Google does not
- * document which concrete types each collection contains — `(cities)` may drop
- * postal codes and `(regions)` may drop localities, and an unrecognised value
- * fails the whole request with INVALID_REQUEST. Filtering here cannot break the
- * request, and costs nothing extra: autocomplete is billed per request, not per
- * prediction returned.
+ * The request now also sends `includedPrimaryTypes: ['(regions)']` — the
+ * documented collection for localities, postal codes, and administrative
+ * areas — so Google stops proposing street addresses in the first place
+ * (an unconstrained request let "44236" match house numbers near the
+ * serverless region, e.g. "44236 Mossy Brook Square, Ashburn, VA"). This
+ * response-side filter stays as a second line of defence, but it no longer
+ * falls back to the unfiltered list: for this field, an empty dropdown is
+ * correct when nothing location-like matches, and the old fallback served
+ * exactly the street addresses the filter exists to remove.
  */
 const LOCATION_TYPES = new Set([
   'locality',
@@ -120,12 +125,33 @@ function toSuggestions(raw: unknown): Suggestion[] {
       types: p.types ?? [],
     }));
 
-  const located = all.filter((p) => p.types.some((t) => LOCATION_TYPES.has(t)));
+  return all
+    .filter((p) => p.types.some((t) => LOCATION_TYPES.has(t)))
+    .map(({ label, placeId }) => ({ label, placeId }));
+}
 
-  // Fall back to the unfiltered list rather than showing the user nothing, in
-  // case Google returns types we haven't enumerated.
-  const chosen = located.length > 0 ? located : all;
-  return chosen.map(({ label, placeId }) => ({ label, placeId }));
+/** Pure 5-digit US zip — resolved via Geocoding instead of Autocomplete. */
+const ZIP_RE = /^\d{5}$/;
+
+/**
+ * Resolve a zip to a single "City, ST 12345" suggestion.
+ *
+ * Autocomplete is the wrong tool for a complete zip: Google treats the digits
+ * as a possible house number and biases toward the request's origin — which is
+ * the serverless region, not the user. Geocoding interprets a 5-digit
+ * `address` as a postal code reliably, is cached 24 h by the fetch cache, and
+ * bills on a cheaper SKU than an autocomplete request.
+ */
+async function zipSuggestion(zip: string, apiKey: string): Promise<Suggestion[]> {
+  const center = await geocodeZip(zip, apiKey);
+  if (!center) return [];
+  return [
+    {
+      label: center.display.replace(/, USA$/, ''),
+      // The client only renders labels; this just needs to be a stable key.
+      placeId: `zip-${zip}`,
+    },
+  ];
 }
 
 export async function GET(req: NextRequest) {
@@ -151,6 +177,22 @@ export async function GET(req: NextRequest) {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) return NextResponse.json([]);
 
+  // A complete zip skips Autocomplete entirely — see zipSuggestion.
+  if (ZIP_RE.test(q)) {
+    try {
+      const suggestions = await zipSuggestion(q, key);
+      // Don't cache an empty result here: geocodeZip returns null on transient
+      // failures too, and caching one would hide the zip for 30 days.
+      if (suggestions.length > 0) writeCache(q, suggestions);
+      return NextResponse.json(suggestions, {
+        headers: { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' },
+      });
+    } catch (err) {
+      console.error('[location-autocomplete] zip geocode failed:', err);
+      return NextResponse.json([]);
+    }
+  }
+
   try {
     const res = await fetch(AUTOCOMPLETE_URL, {
       method: 'POST',
@@ -165,6 +207,9 @@ export async function GET(req: NextRequest) {
         input: q,
         languageCode: 'en',
         includedRegionCodes: ['us'],
+        // Only localities, postal codes, and administrative areas — never
+        // street addresses. See the LOCATION_TYPES comment.
+        includedPrimaryTypes: ['(regions)'],
       }),
       next: { revalidate: 86400 },
     });
