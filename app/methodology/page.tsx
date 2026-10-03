@@ -288,13 +288,13 @@ export default function MethodologyPage() {
             regardless of other signals.
           </p>
           <p className="mt-3">
-            Separately, the <strong>tier badge</strong> next to a business name
-            (Highly Trusted / Trusted / Established) applies additional gates on
-            top of the score, so a high score with thin evidence does not earn
-            the top badge: Highly Trusted requires score ≥ 65 <em>and</em> rating
-            ≥ 4.5 <em>and</em> ≥ 150 reviews; Trusted requires score ≥ 50 and
-            rating ≥ 4.2; Established requires score ≥ 35, rating ≥ 4.0, and
-            ≥ 50 reviews.
+            Separately, internal <strong>evidence tiers</strong> apply additional
+            gates on top of the score (e.g. the top tier requires score ≥ 65,
+            rating ≥ 4.5, and ≥ 150 reviews). These tiers no longer render as a
+            badge — the displayed classification is the score band plus the
+            Confidence level, which communicate the same information without a
+            third overlapping label — but they still gate conservative features
+            such as the quote button and the narrative language.
           </p>
         </Section>
 

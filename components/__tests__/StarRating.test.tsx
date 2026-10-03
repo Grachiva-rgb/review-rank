@@ -58,6 +58,13 @@ describe('StarRating fails safely on invalid input', () => {
     expect(stars(-3)).toMatchObject({ full: 0, half: 0, grey: 5 });
   });
 
+  it('string input (bad upstream typing) fails safely to all grey', () => {
+    // Deliberately violates the prop type the way a bad API payload would.
+    const s = stars('4.5' as unknown as number);
+    // '4.5' is not a finite *number* via Number.isFinite → treated as 0.
+    expect(s).toMatchObject({ full: 0, half: 0, grey: 5 });
+  });
+
   it('above 5 (e.g. a 0–100 score passed by mistake) caps at 5 stars', () => {
     expect(stars(87)).toMatchObject({ full: 5 });
     const label = stars(87).html.match(/aria-label="([^"]+)"/)?.[1];
