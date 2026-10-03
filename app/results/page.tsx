@@ -73,10 +73,10 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-zinc-400 mb-4">
+          <p className="text-[#5A4A3F] mb-4">
             Too many searches from your connection. Please wait a moment and try again.
           </p>
-          <Link href="/" className="text-amber-400 hover:text-amber-300 text-sm">
+          <Link href="/" className="text-[#8B5E3C] hover:text-[#6B4A2F] text-sm">
             ← Start a new search
           </Link>
         </div>
@@ -157,8 +157,8 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-zinc-400 mb-4">No search query provided.</p>
-          <Link href="/" className="text-amber-400 hover:text-amber-300 text-sm">
+          <p className="text-[#5A4A3F] mb-4">No search query provided.</p>
+          <Link href="/" className="text-[#8B5E3C] hover:text-[#6B4A2F] text-sm">
             ← Start a new search
           </Link>
         </div>

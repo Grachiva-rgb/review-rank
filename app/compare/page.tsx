@@ -301,7 +301,18 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
   try {
     [placeA, placeB] = await Promise.all([getPlaceDetails(a), getPlaceDetails(b)]);
   } catch {
-    notFound();
+    // A transient Google/API failure used to become notFound() — users were
+    // told the comparison "doesn't exist" and crawlers cached a 404 for a
+    // valid pair. Render a retryable error instead.
+    return (
+      <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <p className="text-red-600 font-medium mb-1">Could not load this comparison</p>
+          <p className="text-[#7A6B63] text-sm mb-4">Please try again in a moment.</p>
+          <Link href="/" className="text-[#8B5E3C] hover:text-[#6B4A2F] text-sm">← Back to search</Link>
+        </div>
+      </div>
+    );
   }
 
   const insight = comparisonInsight(placeA, placeB);

@@ -56,7 +56,6 @@ export default async function CategoryCityPage({ params }: PageProps) {
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://reviewrank.app';
 
   let places: Awaited<ReturnType<typeof searchPlaces>> = [];
-  let fetchError = false;
 
   try {
     // Accept results up to ~6.5 days old. There are 260 of these pages and each
@@ -66,8 +65,15 @@ export default async function CategoryCityPage({ params }: PageProps) {
       cacheTtlMs: SEO_SEARCH_CACHE_TTL_MS,
     });
     places.sort((a, b) => b.review_rank_score - a.review_rank_score);
-  } catch {
-    fetchError = true;
+  } catch (err) {
+    // Throw instead of rendering an error page: during ISR revalidation a
+    // thrown error makes Next KEEP SERVING THE LAST GOOD PAGE, whereas the
+    // previous catch-and-render cached the error state for the full 7-day
+    // revalidate window. At build time the Supabase cache almost always
+    // satisfies these queries; if both Google and the cache are down, the
+    // deploy fails and the previous deployment keeps serving — the right
+    // failure mode.
+    throw err instanceof Error ? err : new Error('city page fetch failed');
   }
 
   const breadcrumbJsonLd = {
@@ -167,18 +173,7 @@ export default async function CategoryCityPage({ params }: PageProps) {
         </div>
 
         {/* Results */}
-        {fetchError ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-            <p className="text-red-700 font-medium mb-1">Could not load rankings</p>
-            <p className="text-[#7A6B63] text-sm">Please try again or search directly.</p>
-            <Link
-              href={`/results?category=${encodeURIComponent(cat.searchQuery)}&location=${encodeURIComponent(city.display)}`}
-              className="inline-block mt-4 text-sm text-[#8B5E3C] hover:text-[#6B4A2F]"
-            >
-              Try a live search →
-            </Link>
-          </div>
-        ) : places.length === 0 ? (
+        {places.length === 0 ? (
           <div className="rounded-2xl border border-[#EDE8E3] bg-white p-12 text-center shadow-sm">
             <p className="text-[#241C15] text-lg mb-1">No results found</p>
             <p className="text-[#7A6B63] text-sm">Try a different city or category.</p>

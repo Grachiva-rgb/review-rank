@@ -410,6 +410,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   // `deferred` > 0 on consecutive runs means the backlog is growing faster than
   // one invocation can drain it — raise the cron frequency rather than
   // MAX_PER_RUN, since the ceiling is wall time, not batch size.
+  // Failure signal: before this, a nightly run erroring on every row looked
+  // identical to a healthy one unless someone read Vercel function logs.
+  if ((results.length > 0 && errors >= Math.max(3, results.length / 2)) || partnerOps.errors.length > 0) {
+    notifyOperator('Nightly ingestion run reported failures', [
+      `Errors: ${errors}/${results.length} ingestion targets`,
+      ...(partnerOps.errors.length ? ['Partner ops errors:', ...partnerOps.errors.slice(0, 5)] : []),
+      'Full detail: Vercel function logs for /api/admin/ingest-tripadvisor.',
+    ]).catch(() => {});
+  }
+
   return NextResponse.json({
     ingested: ok,
     skipped,

@@ -126,7 +126,7 @@ export async function geocodeCityState(
       `&components=country:US|administrative_area:${state}` +
       `&key=${encodeURIComponent(apiKey)}`;
 
-    const res = await fetch(url, { next: { revalidate: 86400 } });
+    const res = await fetch(url, { next: { revalidate: 86400 }, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
@@ -224,7 +224,7 @@ export async function geocodeLocationString(
       `?address=${encodeURIComponent(location)}` +
       `&components=country:US` +
       `&key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, { next: { revalidate: 86400 } });
+    const res = await fetch(url, { next: { revalidate: 86400 }, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     const data = (await res.json()) as {
       status: string;
@@ -257,6 +257,7 @@ export async function geocodeZip(
 
     const res = await fetch(url, {
       next: { revalidate: 86400 }, // cache 24 h
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) return null;

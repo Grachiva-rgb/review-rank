@@ -35,7 +35,23 @@ export function useSavedBusinesses() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setSaved(safeRead<SavedBusiness[]>(SAVED_KEY, []));
+    // Shape-validate what came out of localStorage. JSON.parse succeeding
+    // does not mean the data matches SavedBusiness — a legacy or corrupt
+    // entry (missing numeric fields, wrong container type) used to throw
+    // during render (rating.toFixed on undefined) and, with the data
+    // persisting, left /saved permanently broken until the user cleared
+    // site data by hand. Invalid entries are dropped, valid ones kept.
+    const raw = safeRead<unknown>(SAVED_KEY, []);
+    const valid = (Array.isArray(raw) ? raw : []).filter(
+      (b): b is SavedBusiness =>
+        !!b && typeof b === 'object' &&
+        typeof (b as SavedBusiness).placeId === 'string' &&
+        typeof (b as SavedBusiness).name === 'string' &&
+        typeof (b as SavedBusiness).rating === 'number' &&
+        typeof (b as SavedBusiness).reviewCount === 'number' &&
+        typeof (b as SavedBusiness).score === 'number'
+    );
+    setSaved(valid);
     setHydrated(true);
   }, []);
 

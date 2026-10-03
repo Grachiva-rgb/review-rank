@@ -230,6 +230,9 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
     },
     body: JSON.stringify(body),
     next: { revalidate: 3600 }, // 1 hour — search results don't change meaningfully faster
+    // A hung Google call used to hold the whole page render until the
+    // function limit; fail fast into the existing error paths instead.
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!response.ok) {
@@ -452,6 +455,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
         'X-Goog-FieldMask': fieldMask,
       },
       next: { revalidate: 3600 }, // 1 hour — ratings and review counts move slowly
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {

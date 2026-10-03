@@ -212,6 +212,7 @@ export async function GET(req: NextRequest) {
         includedPrimaryTypes: ['(regions)'],
       }),
       next: { revalidate: 86400 },
+      signal: AbortSignal.timeout(5000),
     });
 
     // Unlike the legacy endpoint, this API signals failure with a real HTTP
