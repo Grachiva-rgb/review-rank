@@ -6,6 +6,7 @@ import { searchPlaces, SEO_SEARCH_CACHE_TTL_MS } from '@/lib/places';
 import { SEO_CATEGORIES, SEO_CITIES, getCategoryBySlug, getCityBySlug } from '@/lib/seo';
 import NavLogo from '@/components/NavLogo';
 import BusinessCard from '@/components/BusinessCard';
+import GoogleMapsAttribution from '@/components/GoogleMapsAttribution';
 import CompareBar from '@/components/CompareBar';
 import NearMeSearch from '@/components/NearMeSearch';
 
@@ -198,6 +199,10 @@ export default async function CategoryCityPage({ params }: PageProps) {
                 category={cat.businessCategory}
               />
             ))}
+            {/* Required attribution for Places-sourced ratings/counts in the cards above */}
+            <div className="text-center">
+              <GoogleMapsAttribution />
+            </div>
           </div>
         )}
         <CompareBar />

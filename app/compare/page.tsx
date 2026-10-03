@@ -8,6 +8,7 @@ import { PlaceDetail, TrendSignal } from '@/lib/types';
 import NavLogo from '@/components/NavLogo';
 import StarRating from '@/components/StarRating';
 import SmartScoreBadge from '@/components/SmartScoreBadge';
+import GoogleMapsAttribution from '@/components/GoogleMapsAttribution';
 
 export const metadata: Metadata = {
   title: 'Compare Businesses',
@@ -132,6 +133,7 @@ function BusinessColumn({
         <p className="text-xs text-[#9A8C85]">
           {place.user_ratings_total.toLocaleString()} reviews
         </p>
+        <GoogleMapsAttribution />
       </div>
 
       {/* Score breakdown */}

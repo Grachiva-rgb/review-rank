@@ -7,6 +7,7 @@ import { Place, SortFilter } from '@/lib/types';
 import { detectCategory, BusinessCategory } from '@/lib/ranking';
 import { getIntentTier } from '@/lib/searchIntent';
 import BusinessCard from './BusinessCard';
+import GoogleMapsAttribution from './GoogleMapsAttribution';
 import FilterBar from './FilterBar';
 import SearchForm from './SearchForm';
 import CompareBar from './CompareBar';
@@ -257,6 +258,8 @@ export default function ResultsClient({
                     category={detectedCategory}
                   />
                 ))}
+                {/* Required attribution for Places-sourced ratings/counts in the cards above */}
+                <GoogleMapsAttribution className="justify-center" />
               </div>
 
               {/* Trust footer */}

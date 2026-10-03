@@ -129,6 +129,10 @@ export interface PlaceDetail {
     rating: number;
     relative_time_description: string;
     text: string;
+    /** Link to view this review on Google Maps — Google policy requires end users have access to it. */
+    google_maps_uri?: string;
+    /** Google-provided link to flag/report this review's content. */
+    flag_content_uri?: string;
   }>;
   smart_score: number;
   review_rank_score: number;
