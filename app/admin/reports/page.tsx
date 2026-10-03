@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { updateReportStatus } from '../actions';
 import NavLogo from '@/components/NavLogo';
 
 // Access to this page is protected by HTTP Basic Auth in middleware.ts.
@@ -55,6 +56,13 @@ export default async function AdminReportsPage() {
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <Link href="/"><NavLogo size="sm" /></Link>
           <span className="text-[#D9CEC8]">/</span>
+          <Link
+            href="/admin/partners"
+            className="text-sm text-[#7A6B63] hover:text-[#8B5E3C] transition-colors"
+          >
+            Partners
+          </Link>
+          <span className="text-[#D9CEC8]">/</span>
           <span className="text-sm text-[#7A6B63]">Admin — Report Requests</span>
         </div>
       </nav>
@@ -107,6 +115,26 @@ export default async function AdminReportsPage() {
                       })}
                     </span>
                   </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-[#F0EBE6] pt-2">
+                  {['new', 'in_progress', 'fulfilled', 'closed'].map((st) => (
+                    <form key={st} action={updateReportStatus}>
+                      <input type="hidden" name="id" value={req.id} />
+                      <input type="hidden" name="status" value={st} />
+                      <button
+                        type="submit"
+                        disabled={req.status === st}
+                        className={`rounded border px-2 py-0.5 text-[10px] uppercase tracking-wide transition-colors ${
+                          req.status === st
+                            ? 'border-[#8B5E3C] bg-[#8B5E3C]/10 text-[#8B5E3C] cursor-default'
+                            : 'border-[#EDE8E3] bg-white text-[#7A6B63] hover:border-[#8B5E3C] hover:text-[#8B5E3C]'
+                        }`}
+                      >
+                        {st.replace('_', ' ')}
+                      </button>
+                    </form>
+                  ))}
                 </div>
                 {req.note && (
                   <p className="text-xs text-[#5A4A3F] mt-2 leading-relaxed border-t border-[#F0EBE6] pt-2">

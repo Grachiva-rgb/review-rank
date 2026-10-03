@@ -30,15 +30,17 @@ async function fetchCoverage(category: string, lat?: number, lng?: number): Prom
 }
 
 // Categories eligible for lead generation
+// legal/medical removed (2026-10): the partner taxonomy has no slug for
+// them, so their mapping fell through to 'other' — a medical appointment
+// request was emailed to whatever unrelated partner registered as "Other".
+// Re-add only together with real partner categories for them.
 const LEAD_ELIGIBLE: Set<BusinessCategory> = new Set([
   'plumbing',
   'hvac',
   'electrical',
   'roofing',
-  'legal',
   'automotive',
   'home_services',
-  'medical',
 ]);
 
 const CATEGORY_CTA: Partial<Record<BusinessCategory, string>> = {

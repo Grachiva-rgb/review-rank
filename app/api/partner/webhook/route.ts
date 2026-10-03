@@ -105,6 +105,7 @@ async function activatePartnerFromSession(session: Stripe.Checkout.Session) {
 
   if (partnerId) {
     await sbUpdate('partners', `id=eq.${encodeURIComponent(partnerId)}`, patch);
+    sendWelcomeEmail(email).catch(() => {});
     return;
   }
 
@@ -123,8 +124,40 @@ async function activatePartnerFromSession(session: Stripe.Checkout.Session) {
     const rowId = rows[0]?.id;
     if (rowId) {
       await sbUpdate('partners', `id=eq.${encodeURIComponent(rowId)}`, patch);
+      sendWelcomeEmail(email).catch(() => {});
     }
   }
+}
+
+/**
+ * First (and previously only-missing) partner touchpoint after payment:
+ * confirms activation, states what to expect, and gives the billing contact.
+ * Fire-and-forget — activation must never fail because an email did.
+ */
+async function sendWelcomeEmail(email: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !email) return;
+  const portal = process.env.PARTNER_PORTAL_URL;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_ADDRESS || 'ReviewRank Leads <leads@reviewrank.app>',
+      to: email,
+      subject: 'Your ReviewRank Partner subscription is active',
+      text: [
+        'Your ReviewRank Partner subscription is now active.',
+        '',
+        'You will receive matched leads in your category by email as customers submit requests. Reply quickly — leads convert best on first contact.',
+        '',
+        portal
+          ? `Manage your subscription (update card, cancel): ${portal}`
+          : 'To update billing details or cancel, email partners@reviewrank.app.',
+        '',
+        'Partner status never affects rankings or scores on ReviewRank.',
+      ].join('\n'),
+    }),
+  });
 }
 
 async function markPartnerStatus(subscriptionId: string, status: 'active' | 'past_due' | 'canceled') {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { geocodeCityState } from '@/lib/locationIntent';
+import { notifyOperator } from '@/lib/notifyOperator';
 import { getStripe, isStripeConfigured, PARTNER_MONTHLY_CENTS } from '@/lib/stripe';
-import { isSupabaseConfigured, sbInsert } from '@/lib/supabase';
+import { isSupabaseConfigured, sbInsert, sbUpdate } from '@/lib/supabase';
 import { normalizePartnerCategory } from '@/lib/categories';
 import { rateLimit, clientIp } from '@/lib/ratelimit';
 
@@ -49,6 +51,28 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Geocode the partner's base BEFORE insert. Without coordinates the radius
+  // matcher treats the partner as "no geo restriction" and sends them every
+  // category lead nationwide — the service_radius_miles feature the partner
+  // page sells had zero runtime effect because nothing ever wrote lat/lng.
+  // Geocoding failure is non-fatal (nationwide fallback, as before), but the
+  // operator is told so it can be fixed by hand.
+  let partnerLat: number | null = null;
+  let partnerLng: number | null = null;
+  const mapsKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (mapsKey) {
+    const center = await geocodeCityState(city, state, mapsKey).catch(() => null);
+    if (center) {
+      partnerLat = center.lat;
+      partnerLng = center.lng;
+    } else {
+      notifyOperator('Partner signup could not be geocoded', [
+        `${business_name} — ${city}, ${state}`,
+        'This partner will receive NATIONWIDE category leads until coordinates are set.',
+      ]).catch(() => {});
+    }
+  }
+
   // Create a pending partner record up front so the webhook can correlate.
   let partnerId: string | null = null;
   if (isSupabaseConfigured()) {
@@ -58,6 +82,8 @@ export async function POST(req: NextRequest) {
         {
           business_name, contact_email, contact_phone,
           category, city, state,
+          latitude: partnerLat,
+          longitude: partnerLng,
           service_radius_miles: radius,
           monthly_price_cents: PARTNER_MONTHLY_CENTS,
           status: 'pending',
@@ -116,6 +142,14 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    // Record the session id so paid-but-pending rows can be reconciled
+    // against Stripe if the webhook ever fails to arrive.
+    if (partnerId && isSupabaseConfigured()) {
+      sbUpdate('partners', `id=eq.${encodeURIComponent(partnerId)}`, {
+        checkout_session_id: session.id,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {

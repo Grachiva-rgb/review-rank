@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
     description,
     business_name,
     business_place_id,
+    business_lat,
+    business_lng,
     category,
   } = body as Record<string, unknown>;
 
@@ -161,6 +163,13 @@ export async function POST(request: NextRequest) {
       // The partner-matching loop is fast (single Supabase select + Resend
       // sends, typically <2s total), so awaiting is worth the latency.
       try {
+        // The quote button has always sent the business's coordinates; this
+        // route used to drop them, which made radius matching dead code.
+        const lat = typeof business_lat === 'number' && Number.isFinite(business_lat)
+          && business_lat >= -90 && business_lat <= 90 ? business_lat : undefined;
+        const lng = typeof business_lng === 'number' && Number.isFinite(business_lng)
+          && business_lng >= -180 && business_lng <= 180 ? business_lng : undefined;
+
         await deliverLeadToPartners({
           leadId,
           category:     sanitized.category,
@@ -168,6 +177,8 @@ export async function POST(request: NextRequest) {
           contactName:  sanitized.contact_name,
           contactPhone: sanitized.contact_phone,
           description:  sanitized.description,
+          lat,
+          lng,
         });
       } catch (err) {
         // Delivery failures must not block the user from submitting their

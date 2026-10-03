@@ -28,7 +28,10 @@ import {
   saveTABusinessData,
   getCachedTAData,
 } from '@/lib/tripadvisor';
-import { sbSelect, sbDelete, isSupabaseConfigured } from '@/lib/supabase';
+import { sbSelect, sbUpdate, sbDelete, isSupabaseConfigured } from '@/lib/supabase';
+import { getStripe, isStripeConfigured } from '@/lib/stripe';
+import { geocodeCityState } from '@/lib/locationIntent';
+import { notifyOperator } from '@/lib/notifyOperator';
 import { secretMatches } from '@/lib/timingSafe';
 
 export const runtime = 'nodejs';
@@ -151,6 +154,86 @@ async function pruneSearchCache(): Promise<{ pruned: boolean; error?: string }> 
   }
 }
 
+/**
+ * Nightly partner housekeeping — see call site. Bounded, best-effort,
+ * failures reported in the run summary but never fatal.
+ */
+async function runPartnerOps(): Promise<{ reconciled: number; geocoded: number; errors: string[] }> {
+  const out = { reconciled: 0, geocoded: 0, errors: [] as string[] };
+
+  // 1. Paid-but-pending reconciliation
+  if (isStripeConfigured()) {
+    try {
+      const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const pending = await sbSelect<{ id: string; checkout_session_id: string | null; contact_email: string }>(
+        'partners',
+        `status=eq.pending&created_at=lt.${encodeURIComponent(cutoff)}` +
+          `&checkout_session_id=not.is.null&select=id,checkout_session_id,contact_email&limit=20`
+      );
+      const stripe = getStripe();
+      for (const row of pending) {
+        try {
+          const session = await stripe.checkout.sessions.retrieve(row.checkout_session_id as string);
+          if (session.payment_status === 'paid' || session.status === 'complete') {
+            const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+            const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+            if (customerId && subId) {
+              await sbUpdate('partners', `id=eq.${encodeURIComponent(row.id)}&status=eq.pending`, {
+                stripe_customer_id: customerId,
+                stripe_subscription_id: subId,
+                status: 'active',
+                activated_at: new Date().toISOString(),
+              });
+              out.reconciled++;
+              notifyOperator('Reconciled a paid-but-pending partner', [
+                `Partner ${row.id} (${row.contact_email}) was PAID but never activated`,
+                '(webhook likely lost). Now active. Check STRIPE_WEBHOOK_SECRET config.',
+              ]).catch(() => {});
+            }
+          } else if (session.status === 'expired') {
+            await sbUpdate('partners', `id=eq.${encodeURIComponent(row.id)}&status=eq.pending`, {
+              status: 'abandoned',
+            });
+          }
+        } catch (err) {
+          out.errors.push(`reconcile ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } catch (err) {
+      out.errors.push(`reconcile query: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // 2. Geocode backfill for partners missing coordinates
+  const mapsKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (mapsKey) {
+    try {
+      const missing = await sbSelect<{ id: string; city: string; state: string }>(
+        'partners',
+        `latitude=is.null&status=in.(active,pending,past_due)&select=id,city,state&limit=10`
+      );
+      for (const row of missing) {
+        try {
+          const center = await geocodeCityState(row.city, row.state, mapsKey);
+          if (center) {
+            await sbUpdate('partners', `id=eq.${encodeURIComponent(row.id)}`, {
+              latitude: center.lat,
+              longitude: center.lng,
+            });
+            out.geocoded++;
+          }
+        } catch (err) {
+          out.errors.push(`geocode ${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } catch (err) {
+      out.errors.push(`geocode query: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return out;
+}
+
 // Also expose as GET so Vercel Cron can invoke it (crons use GET by default)
 export async function GET(request: Request): Promise<NextResponse> {
   return POST(request);
@@ -169,6 +252,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Housekeeping first: cheap, unrelated to the TA budget, and it must still run
   // on days when there is nothing to ingest.
   const prune = await pruneSearchCache();
+
+  // Partner ops piggyback (same rationale as the prune: cheap, must run even
+  // on days with nothing to ingest):
+  //  1. Reconcile paid-but-pending partners — a lost Stripe webhook used to
+  //     mean a customer paying $99/mo and receiving nothing, forever.
+  //  2. Geocode-backfill partners missing coordinates — without them the
+  //     radius matcher sends nationwide leads.
+  const partnerOps = await runPartnerOps();
 
   const body = await request.json().catch(() => ({})) as {
     placeId?: string;
@@ -228,6 +319,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       message: 'Nothing to ingest',
       ingested: 0,
       cachePruned: prune.pruned,
+      partnerOps,
     });
   }
 
@@ -325,6 +417,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     deferred,
     selected: placeIds.length,
     cachePruned: prune.pruned,
+    partnerOps,
     elapsedMs: Date.now() - startedAt,
     results,
   });

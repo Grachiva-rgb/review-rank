@@ -83,7 +83,7 @@ function leadHtml(lead: LeadPayload, partner: PartnerRow): string {
         <p style="font-size: 12px; color: #7A6B63; margin-top: 20px; border-top: 1px solid #EDE8E3; padding-top: 16px;">
           This lead was matched to <strong>${safe(partner.business_name)}</strong> based on your category (${safe(
           partner.category
-        )}) and service area.
+        )})${partner.latitude != null && partner.longitude != null ? ' and your service area' : ''}.
           Reply within an hour — matched leads convert best on first contact.
         </p>
       </div>

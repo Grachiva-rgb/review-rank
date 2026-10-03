@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import NavLogo from '@/components/NavLogo';
+import { PARTNER_CATEGORY_LABELS } from '@/lib/categories';
+import { sbSelect, isSupabaseConfigured } from '@/lib/supabase';
+import { updateLeadStatus } from '../actions';
 
 // Access to this page is protected by HTTP Basic Auth in middleware.ts.
 // Any request reaching this component is already authenticated.
@@ -46,20 +49,44 @@ async function getLeads(): Promise<Lead[]> {
   }
 }
 
+// Leads store PARTNER taxonomy slugs (auto-repair, general-contractor, …);
+// the old map here used the consumer taxonomy, so most chips rendered raw
+// slugs via the fallback. Legacy rows written before the taxonomy switch
+// keep their old slugs — covered by the extras below.
 const CATEGORY_LABEL: Record<string, string> = {
-  plumbing:      'Plumbing',
-  hvac:          'HVAC',
-  electrical:    'Electrical',
-  roofing:       'Roofing',
-  legal:         'Legal',
-  automotive:    'Automotive',
-  home_services: 'Home Services',
-  medical:       'Medical',
-  general:       'General',
+  ...PARTNER_CATEGORY_LABELS,
+  plumbing: 'Plumbing', hvac: 'HVAC', electrical: 'Electrical',
+  roofing: 'Roofing', legal: 'Legal', automotive: 'Automotive',
+  home_services: 'Home Services', medical: 'Medical', general: 'General',
 };
+
+interface DeliveryRow {
+  lead_id: string;
+  email_status: string;
+}
+
+/** Delivery outcomes per lead — lead_deliveries was written but never read anywhere. */
+async function getDeliveries(leadIds: string[]): Promise<Map<string, { sent: number; failed: number }>> {
+  const out = new Map<string, { sent: number; failed: number }>();
+  if (!isSupabaseConfigured() || leadIds.length === 0) return out;
+  try {
+    const list = leadIds.map((id) => `"${id}"`).join(',');
+    const rows = await sbSelect<DeliveryRow>(
+      'lead_deliveries',
+      `lead_id=in.(${encodeURIComponent(list)})&select=lead_id,email_status`
+    );
+    for (const r of rows) {
+      const e = out.get(r.lead_id) ?? { sent: 0, failed: 0 };
+      if (r.email_status === 'sent') e.sent++; else e.failed++;
+      out.set(r.lead_id, e);
+    }
+  } catch { /* non-fatal: column simply doesn't render */ }
+  return out;
+}
 
 export default async function AdminLeadsPage() {
   const leads = await getLeads();
+  const deliveries = await getDeliveries(leads.map((l) => l.id));
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   // Group counts by category for quick overview
@@ -74,6 +101,13 @@ export default async function AdminLeadsPage() {
       <nav className="border-b border-[#EDE8E3] bg-[#FAF7F0]/95 backdrop-blur-md px-4 py-4">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <Link href="/"><NavLogo size="sm" /></Link>
+          <span className="text-[#D9CEC8]">/</span>
+          <Link
+            href="/admin/partners"
+            className="text-sm text-[#7A6B63] hover:text-[#8B5E3C] transition-colors"
+          >
+            Partners
+          </Link>
           <span className="text-[#D9CEC8]">/</span>
           <Link
             href="/admin/reports"
@@ -188,6 +222,38 @@ export default async function AdminLeadsPage() {
                     Place ID: {lead.business_place_id}
                   </p>
                 )}
+
+                {/* Delivery outcome + status actions */}
+                <div className="mt-2 flex items-center justify-between gap-3 flex-wrap border-t border-[#F0EBE6] pt-2">
+                  <span className="text-[11px] text-[#7A6B63]">
+                    {(() => {
+                      const d = deliveries.get(lead.id);
+                      if (!d) return 'No partner deliveries recorded';
+                      return `Delivered to ${d.sent} partner${d.sent === 1 ? '' : 's'}${
+                        d.failed > 0 ? ` · ${d.failed} FAILED` : ''
+                      }`;
+                    })()}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {['new', 'contacted', 'closed'].map((st) => (
+                      <form key={st} action={updateLeadStatus}>
+                        <input type="hidden" name="id" value={lead.id} />
+                        <input type="hidden" name="status" value={st} />
+                        <button
+                          type="submit"
+                          disabled={lead.status === st}
+                          className={`rounded border px-2 py-0.5 text-[10px] uppercase tracking-wide transition-colors ${
+                            lead.status === st
+                              ? 'border-[#8B5E3C] bg-[#8B5E3C]/10 text-[#8B5E3C] cursor-default'
+                              : 'border-[#EDE8E3] bg-white text-[#7A6B63] hover:border-[#8B5E3C] hover:text-[#8B5E3C]'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
