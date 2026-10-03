@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { notifyOperator } from './notifyOperator';
 import { isSupabaseConfigured, sbInsert, sbSelect } from './supabase';
 
 interface PartnerRow {
@@ -109,9 +110,25 @@ export async function deliverLeadToPartners(lead: LeadPayload): Promise<number> 
     return 0;
   }
 
-  if (partners.length === 0) return 0;
+  if (partners.length === 0) {
+    // The lead is stored, but no partner will ever see it — tell the operator
+    // so it can be worked manually instead of rotting in /admin/leads.
+    notifyOperator('Lead received with NO matching partner', [
+      `Category: ${lead.category}`,
+      `Contact: ${lead.contactName} ${lead.contactPhone}`,
+      `Viewing: ${lead.businessName}`,
+      '',
+      'View all: https://reviewrank.app/admin/leads',
+    ]).catch(() => {});
+    return 0;
+  }
   if (!apiKey) {
     console.log(`[leadDelivery] Resend not configured; would deliver to ${partners.length} partner(s).`);
+    notifyOperator('Lead NOT delivered — Resend not configured', [
+      `Category: ${lead.category}`,
+      `Contact: ${lead.contactName} ${lead.contactPhone}`,
+      `${partners.length} matching partner(s) did not receive this lead.`,
+    ]).catch(() => {});
     return 0;
   }
 
@@ -154,6 +171,16 @@ export async function deliverLeadToPartners(lead: LeadPayload): Promise<number> 
         console.error('[leadDelivery] delivery row insert failed:', err);
       }
     }
+  }
+
+  // Failed sends were previously written to lead_deliveries and never read
+  // by anything — a bad Resend key silently zeroed the partner product.
+  if (delivered < partners.length) {
+    notifyOperator('Lead delivery failures', [
+      `Delivered ${delivered}/${partners.length} for lead from ${lead.contactName}.`,
+      `Category: ${lead.category}`,
+      'Check lead_deliveries rows with email_status=failed for error messages.',
+    ]).catch(() => {});
   }
 
   return delivered;

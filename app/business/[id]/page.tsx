@@ -543,7 +543,7 @@ export default async function BusinessPage({ params, searchParams }: BusinessPag
               href={`/report-request?businessId=${encodeURIComponent(place.place_id)}&businessName=${encodeURIComponent(place.name)}`}
               className="block sm:inline-block w-full sm:w-auto text-center rounded-xl bg-[#8B5E3C] hover:bg-[#6B4A2F] text-white text-sm font-semibold px-5 py-3.5 transition-colors min-h-[44px] flex items-center justify-center sm:flex-none"
             >
-              Get Ranking Report — $19
+              Request a Ranking Report
             </a>
             <p className="text-xs text-[#9A8C85] mt-3">
               Reports do not affect rankings.

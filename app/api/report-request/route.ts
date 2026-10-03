@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { notifyOperator } from '@/lib/notifyOperator';
 import { rateLimit, clientIp } from '@/lib/ratelimit';
 
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -75,6 +76,17 @@ export async function POST(request: NextRequest) {
         console.error('[API /report-request] Supabase insert error:', res.status, detail);
         return NextResponse.json({ error: 'Unable to submit request. Please try again.' }, { status: 500 });
       }
+
+      // Money event: tell the operator immediately — before this alert,
+      // report requests sat in an admin page nobody was pinged to visit.
+      notifyOperator('New ranking report request', [
+        `Business: ${sanitized.business_name}`,
+        `Owner: ${sanitized.owner_name} <${sanitized.owner_email}>`,
+        sanitized.business_place_id ? `Place ID: ${sanitized.business_place_id}` : '',
+        sanitized.note ? `Note: ${sanitized.note}` : '',
+        '',
+        'View all: https://reviewrank.app/admin/reports',
+      ].filter(Boolean)).catch(() => {});
     } else {
       // Supabase not configured — log business info only (no PII)
       console.log('[report-request] New submission (Supabase not configured):', {

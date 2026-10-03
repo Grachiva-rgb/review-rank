@@ -5,7 +5,6 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Place, SortFilter } from '@/lib/types';
 import { detectCategory, BusinessCategory } from '@/lib/ranking';
-import { getIntentTier } from '@/lib/searchIntent';
 import BusinessCard from './BusinessCard';
 import GoogleMapsAttribution from './GoogleMapsAttribution';
 import FilterBar from './FilterBar';
@@ -54,19 +53,16 @@ export default function ResultsClient({
     [category, query]
   );
 
-  // Derive the effective search term for intent-tier calculation
-  const searchTerm = category.trim() || query.trim();
-
   const sortedPlaces = useMemo(() => {
     return [...places].sort((a, b) => {
-      // Intent-aware sort: when using the default ReviewRank sort, intent quality
-      // takes precedence over reputation score.
-      // Tier 0 = strong intent match, 1 = neutral, 2 = soft exclude.
-      // Within each tier, sort by ReviewRank score descending.
+      // Default sort is PURE ReviewRank score. Intent handling happens at
+      // the FILTERING stage only (server-side filterByIntent decides which
+      // businesses are shown) — it must never reorder them. The previous
+      // name-regex "intent tiers" silently ranked a lower-scored business
+      // above a higher-scored one because of its NAME, under UI copy saying
+      // rankings are based on public review signals only, and the
+      // methodology page never disclosed it.
       if (filter === 'smart_score') {
-        const tierA = getIntentTier(a.name, searchTerm);
-        const tierB = getIntentTier(b.name, searchTerm);
-        if (tierA !== tierB) return tierA - tierB;
         return b.review_rank_score - a.review_rank_score;
       }
       if (filter === 'rating') return b.rating - a.rating;

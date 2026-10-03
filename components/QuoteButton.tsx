@@ -189,7 +189,9 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                   </div>
                   <p className="font-display font-semibold text-[#241C15] mb-1">Request sent</p>
                   <p className="text-sm text-[#7A6B63] leading-relaxed">
-                    {businessName} will receive your request and may contact you directly.
+                    Your request has been sent to service providers in our
+                    partner network that cover this category. A provider may
+                    contact you directly.
                   </p>
                   <button
                     onClick={close}
@@ -257,7 +259,9 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                   </button>
 
                   <p className="text-center text-[10px] text-[#9A8C85]">
-                    Your contact info will only be shared with {businessName}.
+                    Your contact info is shared with matching service
+                    providers in our partner network so they can respond to
+                    your request.
                   </p>
                 </form>
               )}

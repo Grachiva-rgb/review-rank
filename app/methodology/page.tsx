@@ -306,6 +306,7 @@ export default function MethodologyPage() {
               "Google's API returns at most 5 reviews per business, selected and ordered by RELEVANCE as determined by Google. It offers no way to request the most recent reviews, so sentiment and consistency are computed from this relevance-ranked sample — treat them as a spot-check, not a trend.",
               'For hotels, restaurants, and attractions we also display Tripadvisor data (rating, review count, ranking, awards) in a supplemental panel. Tripadvisor data does NOT change the ReviewRank Score — it is shown side-by-side so you can compare platforms yourself.',
               'The "review sample above/below average" indicator compares the sampled reviews against the long-run rating. It is a proxy, not a measured trend — we do not yet have historical data.',
+              'Query-intent handling only affects WHICH businesses appear for a search (filtering out obvious mismatches). It never reorders results: within any list, ordering under the default sort is purely by ReviewRank Score.',
             ].map((item, i) => (
               <li key={i} className="flex gap-2 text-sm text-[#5A4A3F] leading-relaxed">
                 <span className="text-[#B8A89F] flex-shrink-0 mt-1">·</span>
