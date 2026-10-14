@@ -5,20 +5,12 @@ import { BusinessCategory } from '@/lib/ranking';
 import { businessCategoryToPartnerCategory } from '@/lib/categories';
 
 // ─── Module-level coverage cache ─────────────────────────────────────────────
-// Keyed by "category:lat1dp:lng1dp" (1 decimal ≈ 11 km precision).
-// All QuoteButton instances on the same page share this map, so we issue
-// at most one network request per unique category+area combination.
-const coverageCache = new Map<string, Promise<boolean>>();
+// Exact business identity avoids reusing coverage across radius boundaries.
+// This is a hint only: submission always verifies/matches again server-side.
+const coverageCache = new Map<string, { expiresAt: number; promise: Promise<boolean> }>();
 
-function cacheKey(category: string, lat?: number, lng?: number): string {
-  if (lat == null || lng == null) return category;
-  return `${category}:${lat.toFixed(1)}:${lng.toFixed(1)}`;
-}
-
-async function fetchCoverage(category: string, lat?: number, lng?: number): Promise<boolean> {
-  const params = new URLSearchParams({ category });
-  if (lat != null) params.set('lat', lat.toFixed(4));
-  if (lng != null) params.set('lng', lng.toFixed(4));
+async function fetchCoverage(category: string, businessId: string): Promise<boolean> {
+  const params = new URLSearchParams({ category, business_place_id: businessId });
   try {
     const res = await fetch(`/api/partner-coverage?${params.toString()}`);
     if (!res.ok) return false;
@@ -55,34 +47,43 @@ const CATEGORY_CTA: Partial<Record<BusinessCategory, string>> = {
 interface QuoteButtonProps {
   businessName: string;
   businessId: string;
+  businessAddress?: string;
   category: BusinessCategory;
-  lat?: number;
-  lng?: number;
 }
 
-export default function QuoteButton({ businessName, businessId, category, lat, lng }: QuoteButtonProps) {
+export default function QuoteButton({ businessName, businessId, businessAddress, category }: QuoteButtonProps) {
   const [isOpen, setIsOpen]       = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState('');
+  const [delivered, setDelivered] = useState(false);
   // null = unknown (loading), true = show, false = hide
   const [hasPartner, setHasPartner] = useState<boolean | null>(null);
 
   const nameRef  = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const descRef  = useRef<HTMLTextAreaElement>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
 
   // Only eligible service categories can ever show the button
   const isEligible = LEAD_ELIGIBLE.has(category);
 
   useEffect(() => {
     if (!isEligible) return;
-    const key = cacheKey(businessCategoryToPartnerCategory(category) ?? category, lat, lng);
-    if (!coverageCache.has(key)) {
-      coverageCache.set(key, fetchCoverage(businessCategoryToPartnerCategory(category) ?? category, lat, lng));
+    const partnerCategory = businessCategoryToPartnerCategory(category);
+    const key = `${partnerCategory}:${businessId}`;
+    const cached = coverageCache.get(key);
+    if (!cached || cached.expiresAt <= Date.now()) {
+      coverageCache.set(key, {
+        expiresAt: Date.now() + 300_000,
+        promise: fetchCoverage(partnerCategory, businessId),
+      });
     }
-    coverageCache.get(key)!.then(setHasPartner);
-  }, [isEligible, category, lat, lng]);
+    let canceled = false;
+    setHasPartner(null);
+    coverageCache.get(key)!.promise.then(value => { if (!canceled) setHasPartner(value); });
+    return () => { canceled = true; };
+  }, [isEligible, category, businessId]);
 
   // Don't render if category is ineligible, or if coverage check is still
   // pending (null) or confirmed false.
@@ -93,6 +94,7 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
   function close() {
     setIsOpen(false);
     setSubmitted(false);
+    setDelivered(false);
     setError('');
   }
 
@@ -105,6 +107,10 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
     if (!name)        { setError('Please enter your name.');                  return; }
     if (!phone)       { setError('Please enter a phone number.');             return; }
     if (!description) { setError('Please describe what you need.');           return; }
+    if (!consentRef.current?.checked) {
+      setError('Please confirm the service area and agree to local partner sharing.');
+      return;
+    }
 
     setError('');
     setSubmitting(true);
@@ -117,22 +123,21 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
           contact_name:       name,
           contact_phone:      phone,
           description,
-          business_name:      businessName,
           business_place_id:  businessId,
           // Map the ranking-side BusinessCategory (e.g. "automotive",
           // "home_services") to the partner taxonomy slug stored in the
           // `partners` table (e.g. "auto-repair", "general-contractor").
           // The API normalizes again server-side for defense in depth.
           category:           businessCategoryToPartnerCategory(category),
-          // Geographic coordinates for partner proximity matching
-          ...(lat != null && lng != null ? { business_lat: lat, business_lng: lng } : {}),
+          share_with_local_partners: true,
         }),
       });
 
+      const data = await res.json().catch(() => ({})) as { error?: string; delivered?: boolean };
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError((data as { error?: string }).error ?? 'Unable to send request. Please try again.');
       } else {
+        setDelivered(data.delivered === true);
         setSubmitted(true);
       }
     } catch {
@@ -187,9 +192,11 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                   <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#2F6F4E]/10">
                     <span className="text-xl text-[#2F6F4E]">✓</span>
                   </div>
-                  <p className="font-display font-semibold text-[#241C15] mb-1">Request sent</p>
+                  <p className="font-display font-semibold text-[#241C15] mb-1">Request received</p>
                   <p className="text-sm text-[#7A6B63] leading-relaxed">
-                    {businessName} will receive your request and may contact you directly.
+                    {delivered
+                      ? 'Matching local partners were notified and may contact you directly. The business you were viewing is not guaranteed to receive the request.'
+                      : 'Your request was saved, but no partner was notified. You can contact a provider directly if you need immediate help.'}
                   </p>
                   <button
                     onClick={close}
@@ -242,6 +249,15 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                     />
                   </div>
 
+                  <label className="flex items-start gap-2 text-xs text-[#5A4A3F]">
+                    <input ref={consentRef} type="checkbox" required className="mt-0.5" />
+                    <span>
+                      I need service near {businessName}{businessAddress ? ` (${businessAddress})` : ''}.
+                      I agree to share my contact details and request with matching local partners
+                      covering this area, not necessarily this business.
+                    </span>
+                  </label>
+
                   {error && (
                     <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
                       {error}
@@ -257,7 +273,7 @@ export default function QuoteButton({ businessName, businessId, category, lat, l
                   </button>
 
                   <p className="text-center text-[10px] text-[#9A8C85]">
-                    Your contact info will only be shared with {businessName}.
+                    Only matching local partners receive your contact information.
                   </p>
                 </form>
               )}

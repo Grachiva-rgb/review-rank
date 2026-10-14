@@ -135,9 +135,8 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
           <QuoteButton
             businessName={place.name}
             businessId={place.place_id}
+            businessAddress={place.formatted_address}
             category={category}
-            lat={place.geometry.location.lat}
-            lng={place.geometry.location.lng}
           />
         )}
 

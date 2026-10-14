@@ -24,8 +24,8 @@ export default function PartnerForm() {
       service_radius_miles: Number(fd.get('service_radius_miles') || 25),
     };
 
-    if (!payload.business_name || !payload.contact_email || !payload.category) {
-      setError('Business name, email, and category are required.');
+    if (!payload.business_name || !payload.contact_email || !payload.category || !payload.city || !payload.state) {
+      setError('Business name, email, category, service city, and state are required.');
       setSubmitting(false);
       return;
     }
@@ -69,8 +69,8 @@ export default function PartnerForm() {
         />
         <Field label="Contact email *" name="contact_email" type="email" required />
         <Field label="Contact phone" name="contact_phone" type="tel" />
-        <Field label="City" name="city" />
-        <Field label="State" name="state" placeholder="TX" maxLength={2} />
+        <Field label="Service city *" name="city" required maxLength={80} />
+        <Field label="State *" name="state" placeholder="TX" required maxLength={2} />
         <Field
           label="Service radius (miles)"
           name="service_radius_miles"
@@ -80,6 +80,10 @@ export default function PartnerForm() {
           max={200}
         />
       </div>
+      <p className="text-xs text-[#7A6B63]">
+        Your service radius is measured from the center of this city, not your street address.
+        We verify the area before checkout.
+      </p>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

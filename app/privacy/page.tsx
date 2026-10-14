@@ -17,7 +17,7 @@ const SECTIONS: Array<{ title: string; body: string[] }> = [
     body: [
       'Search activity: the business types and locations you search for, including a city, ZIP code, or — only if you grant browser permission — your device location, used to run that search. Precise location is used for the search request and is not stored in an account profile.',
       'Saved businesses and comparisons: stored locally in your browser (localStorage), not on our servers.',
-      'Quote and report requests: if you submit a form, we collect the details you provide (name, phone number or email, and your request text) and share them only as described below.',
+      'Quote and report requests: if you submit a form, we collect the details you provide (name, phone number or email, and your request text) and share them only as described below. For quotes, we also record the business-area coordinates used for matching and the time you consented to partner sharing; these are not your precise job address.',
       'Partner accounts: business contact details and service areas provided during signup. Payments are processed by Stripe; ReviewRank never receives or stores card numbers.',
       'Analytics: we use PostHog to understand how the product is used (pages viewed, interactions, approximate location derived from IP). Form inputs are masked in any session capture.',
       'Server logs: our hosting provider (Vercel) processes IP addresses and request metadata to serve and protect the site.',
@@ -26,13 +26,14 @@ const SECTIONS: Array<{ title: string; body: string[] }> = [
   {
     title: 'How we use it',
     body: [
-      'To run searches and show results, to deliver quote requests to the matching service provider, to fulfil report requests, to operate partner subscriptions, to improve the product, and to protect the service from abuse (rate limiting, fraud prevention).',
+      'To run searches and show results, to deliver quote requests to matching local partners covering the business area you confirm, to fulfil report requests, to operate partner subscriptions, to improve the product, and to protect the service from abuse (rate limiting, fraud prevention). The business you were viewing is not guaranteed to receive a quote request.',
       'We do not sell personal information. Commercial relationships never affect rankings or scores.',
     ],
   },
   {
     title: 'Who receives data',
     body: [
+      'With your consent, matching local partners receive the name, phone number, and request text you submit. Partners must cover the confirmed business area and match the service category; unknown partner locations do not qualify.',
       'Google (Google Maps Platform): your search queries are used to request business data from the Google Places API. Use of Google Maps features and content is subject to the Google Privacy Policy at https://policies.google.com/privacy, which is incorporated into this policy by reference.',
       'Stripe: payment processing for partner subscriptions (stripe.com/privacy).',
       'Resend: transactional email delivery for lead notifications.',

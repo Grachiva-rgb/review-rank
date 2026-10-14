@@ -364,7 +364,7 @@ export function categorizePlace(name: string, primaryType?: string) {
  * caching place data for up to 30 days; 14 keeps ratings/reviews fresh enough
  * for a detail page while capping spend at ~2 calls/business/month worst case.
  */
-const PLACE_DETAILS_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+export const PLACE_DETAILS_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 function buildPlaceDetailsCacheKey(placeId: string): string {
   return `place_details:${placeId}`;
