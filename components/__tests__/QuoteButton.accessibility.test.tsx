@@ -12,10 +12,11 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   return {
     ...actual,
-    useState: ((initial: unknown) => {
+    // This explicit state fixture is not an implementation of React's generic hook.
+    useState: (initial: unknown) => {
       const value = controlledState.values[controlledState.index++];
       return [value === undefined ? initial : value, () => {}];
-    }) as typeof actual.useState,
+    },
   };
 });
 
