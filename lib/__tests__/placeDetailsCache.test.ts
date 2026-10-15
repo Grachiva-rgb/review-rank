@@ -119,6 +119,25 @@ describe('getPlaceDetails cache-only behavior', () => {
     expect(sbUpsertMock).not.toHaveBeenCalled();
   });
 
+  it('serves the minimal existing staging fixture without a provider key', async () => {
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', undefined);
+    sbSelectMock.mockResolvedValueOnce(cachedRows({
+      id: 'RR_QA_LOCAL_001',
+      displayName: { text: 'STAGING TEST ONLY - Hudson area' },
+      location: { latitude: 41.24, longitude: -81.44 },
+    }));
+
+    const detail = await getPlaceDetails('RR_QA_LOCAL_001');
+
+    expect(detail).toMatchObject({
+      place_id: 'RR_QA_LOCAL_001',
+      name: 'STAGING TEST ONLY - Hudson area',
+      geometry: { location: { lat: 41.24, lng: -81.44 } },
+    });
+    expect(Number.isFinite(detail.review_rank_score)).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['missing', []],
     ['stale (excluded by the freshness filter)', []],
