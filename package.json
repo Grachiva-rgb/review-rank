@@ -12,6 +12,7 @@
     "build": "next build --webpack",
     "verify:build": "node scripts/verify-build.cjs",
     "verify:smoke": "node scripts/verify-smoke.cjs",
+    "verify:native-toolchain": "node scripts/verify-native-toolchain.cjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -35,6 +36,11 @@
     "react-dom": "^18.3.1",
     "resend": "^6.12.3",
     "stripe": "^22.1.1"
+  },
+  "overrides": {
+    "xcode@3.0.1": {
+      "uuid": "11.1.1"
+    }
   },
   "devDependencies": {
     "@types/node": "^24",

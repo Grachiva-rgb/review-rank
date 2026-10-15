@@ -69,6 +69,7 @@ Tests use Vitest's Oxc JSX transform; no Tinypool dependency remains.
 npm ci
 npm run typecheck
 npm test
+npm run verify:native-toolchain
 npm run verify:build
 npm run verify:smoke
 ```
@@ -87,13 +88,35 @@ On 2026-10-15, `npm audit --package-lock-only` changed from 36 flagged dependenc
 entries (6 critical, 14 high, 16 moderate) to 12 (0 critical, 6 high, 6 moderate).
 This follow-up removes the vulnerable Tailwind globbing chain and upgrades
 Next's bundled PostCSS through supported parent releases, not forced transitive
-overrides. The 2026-10-15 follow-up locked audit reports **3 moderate entries,
-0 high and 0 critical**, all in Capacitor CLI's Xcode/UUID chain. Counts include
-inherited/metavulnerability entries, not distinct exploits. This is **not a clean
-audit**; run the audit again and review current advisories before release. CI now
-fails on high/critical regressions without suppressing moderate findings; issue
-#15 stays open for follow-up. `next lint` was removed in Next 16; no lint command
-is advertised until an ESLint configuration is supplied.
+overrides. That follow-up left **3 moderate entries, 0 high and 0 critical** in
+Capacitor CLI's Xcode/UUID chain. Counts include inherited/metavulnerability
+entries, not distinct exploits.
+
+The native-toolchain follow-up retains coordinated Capacitor 8.5.3 and Xcode
+3.0.1, whose latest published releases still request UUID 7. A narrowly scoped
+`xcode@3.0.1` override selects **UUID 11.1.1**, the latest CommonJS-capable 11.x
+release and the patched threshold for GHSA-w5hq-g745-h8pq. It intentionally
+exceeds Xcode's declared UUID range: compatibility must be checked, not assumed.
+Xcode uses synchronous `require('uuid').v4()`; a blind upgrade to the latest
+ESM-only UUID release is not the chosen compatibility strategy. Remove/revisit
+the override when Xcode declares a supported patched dependency or either
+parent changes. No other UUID consumers are overridden.
+
+`verify:native-toolchain` checks actual CLI-to-Xcode-to-UUID resolution, UUID
+buffer bounds and ID generation, the real Capacitor Swift-file registration
+helper against a temporary copy of the tracked Xcode project, idempotency and
+CLI startup. It does not write the original project, run native sync, compile,
+sign or distribute an app. Provider credentials are stripped and the same
+Node network guard is installed. This is API/project-file compatibility
+coverage, not macOS/Xcode or device QA.
+
+The 2026-10-15 locked audit reports **zero findings at every severity** after
+this fix; the three moderate inherited entries are removed.
+CI audits **all severities** (`--audit-level=low`) without suppressing findings.
+Always rerun the current audit; a zero report is not proof that every dependency
+is vulnerability-free. Issue #15 remains open for overall release verification.
+`next lint` was removed in Next 16; no lint command is advertised until an ESLint
+configuration is supplied.
 
 After the guarded build, `verify:smoke` starts only a loopback server with the
 same credential-stripping network guard. It verifies homepage SSR/security

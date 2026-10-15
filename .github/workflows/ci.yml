@@ -23,10 +23,13 @@ jobs:
       - name: Install dependencies from the committed lockfile
         run: npm ci
 
-      # Moderate native-toolchain findings remain tracked separately in #15.
-      # Fail on high/critical regressions without hiding the residual findings.
-      - name: Audit for high and critical dependency regressions
-        run: npm audit --package-lock-only --audit-level=high
+      # The scoped Xcode/UUID fix removes the remaining moderate chain.
+      # Fail on every reported severity; do not suppress inherited findings.
+      - name: Audit for dependency regressions at every severity
+        run: npm audit --package-lock-only --audit-level=low
+
+      - name: Native toolchain compatibility without a native build
+        run: npm run verify:native-toolchain
 
       - name: Typecheck
         run: npm run typecheck

@@ -4,11 +4,5 @@
       "path": "/api/admin/ingest-tripadvisor",
       "schedule": "17 3 * * *"
     }
-  ],
-  "git": {
-    "deploymentEnabled": {
-      "fix/15-native-toolchain-security": false
-    }
-  },
-  "ignoreCommand": "exit 0"
+  ]
 }
