@@ -416,12 +416,6 @@ async function setCachedPlaceDetails(
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
-  }
-
   // NOTE: photos intentionally excluded — nothing in the UI renders them, so
   // requesting them only inflated the response and the billing tier.
   const fieldMask = [
@@ -446,6 +440,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
   let p = await getCachedPlaceDetails(placeId);
 
   if (!p) {
+    // A fresh stored response needs no provider credential or Google request.
+    // Require the key only for a real cache miss; never fall back to stale data.
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
+    }
+
     const response = await fetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`, {
       headers: {
         'X-Goog-Api-Key': apiKey,

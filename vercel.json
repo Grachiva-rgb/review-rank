@@ -7,7 +7,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "verify/combined-staging-22-25": false
+      "verify/combined-staging-22-25": false,
+      "fix/cache-only-place-details": false
     }
   }
 }
