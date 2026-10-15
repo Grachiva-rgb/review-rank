@@ -1,15 +1,6 @@
 import { Resend } from 'resend';
-import { isSupabaseConfigured, sbInsert, sbSelect } from './supabase';
-
-interface PartnerRow {
-  id: string;
-  business_name: string;
-  contact_email: string;
-  category: string;
-  latitude: number | null;
-  longitude: number | null;
-  service_radius_miles: number;
-}
+import { isSupabaseConfigured, sbInsert } from './supabase';
+import { findMatchingPartners, isCoordinates, type PartnerRow } from './partnerMatching';
 
 interface LeadPayload {
   leadId?: string;
@@ -20,42 +11,6 @@ interface LeadPayload {
   description: string;
   lat?: number;
   lng?: number;
-}
-
-function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 3958.8; // Earth radius, miles
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) *
-      Math.cos((b.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
-
-/**
- * Find active partners in the given category. If lat/lng is provided, filter
- * by each partner's configured service radius. Otherwise return all partners
- * in that category (coverage-wide fallback).
- */
-async function findMatchingPartners(
-  category: string,
-  lat?: number,
-  lng?: number
-): Promise<PartnerRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  const rows = await sbSelect<PartnerRow>(
-    'partners',
-    `select=id,business_name,contact_email,category,latitude,longitude,service_radius_miles&status=eq.active&category=eq.${encodeURIComponent(
-      category
-    )}`
-  );
-  if (typeof lat !== 'number' || typeof lng !== 'number') return rows;
-  return rows.filter((p) => {
-    if (p.latitude == null || p.longitude == null) return true;
-    const d = milesBetween({ lat, lng }, { lat: p.latitude, lng: p.longitude });
-    return d <= p.service_radius_miles;
-  });
 }
 
 function leadHtml(lead: LeadPayload, partner: PartnerRow): string {
@@ -94,16 +49,18 @@ function leadHtml(lead: LeadPayload, partner: PartnerRow): string {
 }
 
 /**
- * Match + deliver. Best-effort, non-blocking — errors are logged but never
- * thrown to the caller. Returns the number of deliveries attempted.
+ * Match + deliver. The route awaits this before returning in serverless.
+ * Returns successful deliveries; errors never cause a category-wide fallback.
  */
 export async function deliverLeadToPartners(lead: LeadPayload): Promise<number> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.RESEND_FROM_ADDRESS || 'ReviewRank Leads <leads@reviewrank.app>';
+  const location = { lat: lead.lat, lng: lead.lng };
+  if (!isCoordinates(location)) return 0;
 
   let partners: PartnerRow[] = [];
   try {
-    partners = await findMatchingPartners(lead.category, lead.lat, lead.lng);
+    partners = await findMatchingPartners(lead.category, location);
   } catch (err) {
     console.error('[leadDelivery] partner lookup failed:', err);
     return 0;

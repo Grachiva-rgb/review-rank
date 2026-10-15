@@ -3,6 +3,7 @@ import { getStripe, isStripeConfigured, PARTNER_MONTHLY_CENTS } from '@/lib/stri
 import { isSupabaseConfigured, sbInsert } from '@/lib/supabase';
 import { normalizePartnerCategory } from '@/lib/categories';
 import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { resolvePartnerServiceCenter, validServiceCity } from '@/lib/partnerLocation';
 
 const MAX_STR = 120;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,6 +20,9 @@ export async function POST(req: NextRequest) {
       { error: 'Partner program is not yet configured on this environment.' },
       { status: 503 }
     );
+  }
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Partner enrollment is temporarily unavailable.' }, { status: 503 });
   }
 
   let body: unknown;
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
   const city          = typeof b.city === 'string' ? b.city.trim().slice(0, 80) : '';
   const stateRaw      = typeof b.state === 'string' ? b.state.trim().toUpperCase() : '';
   const state         = STATE_RE.test(stateRaw) ? stateRaw : '';
-  const radius        = Math.max(1, Math.min(200, Number(b.service_radius_miles) || 25));
+  const radius        = b.service_radius_miles == null ? 25 : Number(b.service_radius_miles);
 
   if (!business_name) return NextResponse.json({ error: 'Business name is required.' }, { status: 400 });
   if (!EMAIL_RE.test(contact_email)) return NextResponse.json({ error: 'Valid email required.' }, { status: 400 });
@@ -47,6 +51,26 @@ export async function POST(req: NextRequest) {
       { error: categoryRaw ? 'Unknown category. Please choose one from the list.' : 'Category is required.' },
       { status: 400 }
     );
+  }
+  if (!validServiceCity(city, state)) {
+    return NextResponse.json({ error: 'A service city and valid US state are required.' }, { status: 400 });
+  }
+  if (!Number.isInteger(radius) || radius < 1 || radius > 200) {
+    return NextResponse.json({ error: 'Service radius must be a whole number from 1 to 200 miles.' }, { status: 400 });
+  }
+  // Validate configuration before spending on geocoding or creating a row.
+  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+  if (!origin) {
+    return NextResponse.json({ error: 'Checkout is not properly configured.' }, { status: 503 });
+  }
+  let center: Awaited<ReturnType<typeof resolvePartnerServiceCenter>>;
+  try {
+    center = await resolvePartnerServiceCenter(city, state, process.env.GOOGLE_PLACES_API_KEY ?? '');
+  } catch {
+    return NextResponse.json({ error: 'We cannot verify your service area right now. Please try again later.' }, { status: 503 });
+  }
+  if (!center) {
+    return NextResponse.json({ error: 'Please enter a recognized service city and state.' }, { status: 422 });
   }
 
   // Create a pending partner record up front so the webhook can correlate.
@@ -58,6 +82,10 @@ export async function POST(req: NextRequest) {
         {
           business_name, contact_email, contact_phone,
           category, city, state,
+          latitude: center.lat,
+          longitude: center.lng,
+          service_area_location_source: 'city_center',
+          service_area_verified_at: new Date().toISOString(),
           service_radius_miles: radius,
           monthly_price_cents: PARTNER_MONTHLY_CENTS,
           status: 'pending',
@@ -65,23 +93,19 @@ export async function POST(req: NextRequest) {
         { returning: true }
       )) as Array<{ id: string }> | null;
       partnerId = inserted?.[0]?.id ?? null;
+      if (!partnerId) {
+        return NextResponse.json({ error: 'Could not save your service area. Please try again.' }, { status: 503 });
+      }
     } catch (err) {
       console.error('[partner/checkout] Supabase insert failed:', err);
-      // Continue — checkout can still succeed; webhook will try to reconcile by email.
+      // Never charge for a signup whose routable partner record was not saved.
+      return NextResponse.json({ error: 'Could not save your service area. Please try again.' }, { status: 503 });
     }
   }
 
   // Use a configured site URL rather than the request Origin header.
   // Trusting Origin would allow an attacker to forge the header and set
   // Stripe's success/cancel URLs to an arbitrary domain.
-  const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
-  if (!origin) {
-    console.error('[partner/checkout] NEXT_PUBLIC_SITE_URL is not configured');
-    return NextResponse.json(
-      { error: 'Checkout is not properly configured. Please contact support.' },
-      { status: 503 }
-    );
-  }
   const stripe = getStripe();
 
   try {

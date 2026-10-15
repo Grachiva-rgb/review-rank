@@ -4,5 +4,10 @@
       "path": "/api/admin/ingest-tripadvisor",
       "schedule": "17 3 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "verify/combined-staging-22-25": false
+    }
+  }
 }
