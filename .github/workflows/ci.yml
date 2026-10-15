@@ -23,10 +23,10 @@ jobs:
       - name: Install dependencies from the committed lockfile
         run: npm ci
 
-      # Residual high/moderate build-toolchain findings are tracked separately.
-      # This is a new critical-regression gate, not a claim of a clean audit.
-      - name: Audit for critical dependency regressions
-        run: npm audit --package-lock-only --audit-level=critical
+      # Moderate native-toolchain findings remain tracked separately in #15.
+      # Fail on high/critical regressions without hiding the residual findings.
+      - name: Audit for high and critical dependency regressions
+        run: npm audit --package-lock-only --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
@@ -36,3 +36,6 @@ jobs:
 
       - name: Controlled production-mode build
         run: npm run verify:build
+
+      - name: Credential-free HTTP and cache-header smoke tests
+        run: npm run verify:smoke

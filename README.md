@@ -2,7 +2,7 @@
 
 Find the places locals trust most — ranked by real customer reviews, not paid placements.
 
-Built with Next.js 15 · Deployed on Vercel · Native mobile via Capacitor (iOS + Android).
+Built with Next.js 16 · Tailwind CSS 4 · Deployed on Vercel · Native mobile via Capacitor (iOS + Android).
 
 **Smart Score** = `rating × log₁₀(review_count + 1)`
 
@@ -57,16 +57,20 @@ Open http://localhost:3000.
 
 ## Dependency and security verification
 
-The committed lockfile uses Next.js 15.5.28, Vitest 5.0.5, and coordinated
-Capacitor 8.5.3 packages. React 18 and Tailwind 3 are retained to avoid combining
-this security update with framework/UI major-version migrations. Tests use
-Vitest's Oxc JSX transform; no Tinypool dependency remains in the lockfile.
+The committed lockfile uses Next.js 16.4.1 (including patched PostCSS 8.5.23),
+Tailwind / its PostCSS plugin 4.3.3, root PostCSS 8.5.30, Vitest 5.0.5, and
+coordinated Capacitor 8.5.3 packages. React 18 is retained within Next's published
+peer range. Explicit Webpack flags preserve the established bundler rather than
+also adopting Next 16's default Turbopack migration. The admin request gate uses
+Next 16's `proxy.ts` convention; server-page authorization remains in place.
+Tests use Vitest's Oxc JSX transform; no Tinypool dependency remains.
 
 ```bash
 npm ci
 npm run typecheck
 npm test
 npm run verify:build
+npm run verify:smoke
 ```
 
 `verify:build` performs a production-mode compilation with application/provider
@@ -81,13 +85,32 @@ with the separately approved environment.
 
 On 2026-10-15, `npm audit --package-lock-only` changed from 36 flagged dependency
 entries (6 critical, 14 high, 16 moderate) to 12 (0 critical, 6 high, 6 moderate).
-These include inherited/metavulnerability entries, not 36 or 12 distinct exploits.
-Remaining findings are in the transitive CSS and native build-tool chains,
-including Next's nested PostCSS, Tailwind dependencies, and Capacitor CLI's
-Xcode/UUID dependency. Some are classified as production dependencies by npm.
-This is **not a clean audit**; run the audit again and review current advisories
-before release. CI adds a critical-regression gate without suppressing the
-remaining findings; issue #15 stays open for follow-up.
+This follow-up removes the vulnerable Tailwind globbing chain and upgrades
+Next's bundled PostCSS through supported parent releases, not forced transitive
+overrides. The 2026-10-15 follow-up locked audit reports **3 moderate entries,
+0 high and 0 critical**, all in Capacitor CLI's Xcode/UUID chain. Counts include
+inherited/metavulnerability entries, not distinct exploits. This is **not a clean
+audit**; run the audit again and review current advisories before release. CI now
+fails on high/critical regressions without suppressing moderate findings; issue
+#15 stays open for follow-up. `next lint` was removed in Next 16; no lint command
+is advertised until an ESLint configuration is supplied.
+
+After the guarded build, `verify:smoke` starts only a loopback server with the
+same credential-stripping network guard. It verifies homepage SSR/security
+headers, fail-closed admin proxy behavior, short-input autocomplete (which
+returns before database/provider access), API no-store headers, and immutable
+static-asset caching. It does not exercise paid/live-provider workflows.
+
+### Browser and mobile compatibility release gate
+
+Tailwind 4 raises the styling baseline to **Safari 16.4+, Chrome 111+ and Firefox
+128+**. Confirm that this is acceptable for the supported audience before
+merging/deploying; older iOS WebViews can otherwise lose styling. Native device
+QA remains required. Compatibility CSS preserves legacy brand/named colors,
+shadows, focus outlines, responsive utilities and safe-area precedence. Automated
+CSS checks are not a substitute for real-device search/detail/forms/travel and
+Stripe test-mode verification. Cache keys, retention policy, provider-fetch
+code and lead-matching logic are unchanged.
 
 Admin pages also revalidate Basic Auth on the server before fetching private
 records, rather than relying exclusively on middleware matching.

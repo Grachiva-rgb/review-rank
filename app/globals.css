@@ -1,6 +1,21 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+@config "../tailwind.config.ts";
+
+/* Tailwind 3 hover utilities worked regardless of pointer capability. */
+@custom-variant hover (&:hover);
+
+/* Keep candidate discovery local to this app; sibling review snapshots and
+   verification fixtures must not contribute utilities to the production CSS. */
+@source "../app";
+@source "../components";
+
+/* Preserve the Tailwind 3 shadow-sm and default ring utility values. */
+@theme {
+  --radius-sm: 0.125rem;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --default-ring-width: 3px;
+  --default-ring-color: rgb(59 130 246 / 0.5);
+}
 
 :root {
   --font-display: 'Plus Jakarta Sans', sans-serif;
@@ -15,46 +30,6 @@
   --color-muted: #7A6B63;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  font-family: var(--font-body);
-  background-color: var(--color-bg);
-  color: var(--color-text);
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: #FAF7F0;
-}
-::-webkit-scrollbar-thumb {
-  background: #D9CEC8;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #B5A8A0;
-}
-
-/* Line clamp utility */
-.line-clamp-4 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-}
-
-/* ── Mobile / Capacitor safe area ──────────────────────────────────────────
-   On iPhone with a notch or Dynamic Island, env(safe-area-inset-*) provides
-   the inset values. viewport-fit=cover in the <meta viewport> tag activates
-   this. Without it, content can appear behind the notch or home indicator.
-   ────────────────────────────────────────────────────────────────────────── */
-
 :root {
   --safe-top:    env(safe-area-inset-top,    0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -62,34 +37,96 @@ body {
   --safe-right:  env(safe-area-inset-right,  0px);
 }
 
-/* Sticky nav bars must clear the status bar on iOS */
+@layer base {
+  /* Tailwind 3 preflight gave unstyled borders gray-200 and opaque gray-400
+     placeholders; Tailwind 4 defaults changed both to currentColor-based. */
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+
+  ::placeholder {
+    color: #9ca3af;
+    opacity: 1;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  :disabled {
+    cursor: default;
+  }
+
+  input:where(:not([type]), [type="text"], [type="email"], [type="search"], [type="tel"], [type="url"], [type="password"], [type="number"]),
+  textarea,
+  select {
+    background-color: #fff;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #FAF7F0;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #FAF7F0;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D9CEC8;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #B5A8A0;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Keep safe-area spacing unlayered so it wins over padding utilities. */
 nav.safe-top,
 header.safe-top {
   padding-top: calc(var(--safe-top) + 0.75rem);
 }
 
-/* Bottom-anchored elements (modals, CTAs) must clear the home indicator */
 .safe-bottom {
   padding-bottom: calc(var(--safe-bottom) + 1rem);
 }
 
-/* Full-screen pages on iOS — push content below the status bar */
 .safe-screen {
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
 }
 
-/* Prevent iOS WebView rubber-banding from showing the background color */
-html {
-  background-color: #FAF7F0;
+/* Keep the existing form class contract. A same-name @utility is merged
+   before Tailwind's built-in outline-none declarations, so override the
+   actual existing base/focus selectors afterward in the utilities layer.
+   New forms should use Tailwind 4's outline-hidden instead. */
+@layer utilities {
+  .outline-none,
+  .focus\:outline-none:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
 }
 
-/* Remove tap highlight on mobile — use :active states instead */
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Prevent text size adjustment on orientation change (iOS Safari) */
-html {
-  -webkit-text-size-adjust: 100%;
-}
+/* Tailwind 4 requires Safari 16.4+, Chrome 111+, and Firefox 128+.
+   Preserve this floor as a merge/release compatibility caveat. */

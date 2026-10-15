@@ -51,6 +51,8 @@ if (!run(process.execPath, ['-e', selfTestInvocation], verificationEnvironment))
   process.exit(process.exitCode || 1);
 }
 
-if (!run(process.execPath, [nextCliPath, 'build'], verificationEnvironment)) {
+// Keep the established Webpack build instead of combining the dependency
+// remediation with Next 16's separate default-Turbopack migration.
+if (!run(process.execPath, [nextCliPath, 'build', '--webpack'], verificationEnvironment)) {
   process.exit(process.exitCode || 1);
 }
