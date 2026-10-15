@@ -13,6 +13,7 @@
 @theme {
   --radius-sm: 0.125rem;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur-sm: 4px;
   --default-ring-width: 3px;
   --default-ring-color: rgb(59 130 246 / 0.5);
 }
@@ -125,6 +126,16 @@ header.safe-top {
   .focus\:outline-none:focus {
     outline: 2px solid transparent;
     outline-offset: 2px;
+  }
+
+  /* Keep the existing TripAdvisor tint arithmetic rather than introducing
+     the new color-mix serialization/rounding into these brand treatments. */
+  .bg-\[\#00AA6C\]\/5 {
+    background-color: rgb(0 170 108 / 0.05);
+  }
+
+  .border-\[\#00AA6C\]\/30 {
+    border-color: rgb(0 170 108 / 0.3);
   }
 }
 
