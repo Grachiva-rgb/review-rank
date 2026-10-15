@@ -8,7 +8,8 @@
   "git": {
     "deploymentEnabled": {
       "verify/combined-staging-22-25": false,
-      "fix/cache-only-place-details": false
+      "fix/cache-only-place-details": false,
+      "fix/quote-modal-accessibility": false
     }
   }
 }
