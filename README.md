@@ -112,7 +112,7 @@ coverage, not macOS/Xcode or device QA.
 
 The 2026-10-15 locked audit reports **zero findings at every severity** after
 this fix; the three moderate inherited entries are removed.
-CI audits **all severities** (`--audit-level=low`) without suppressing findings.
+CI audits **all severities** (`--audit-level=info`) without suppressing findings.
 Always rerun the current audit; a zero report is not proof that every dependency
 is vulnerability-free. Issue #15 remains open for overall release verification.
 `next lint` was removed in Next 16; no lint command is advertised until an ESLint

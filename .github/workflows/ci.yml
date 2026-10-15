@@ -26,7 +26,7 @@ jobs:
       # The scoped Xcode/UUID fix removes the remaining moderate chain.
       # Fail on every reported severity; do not suppress inherited findings.
       - name: Audit for dependency regressions at every severity
-        run: npm audit --package-lock-only --audit-level=low
+        run: npm audit --package-lock-only --audit-level=info
 
       - name: Native toolchain compatibility without a native build
         run: npm run verify:native-toolchain
