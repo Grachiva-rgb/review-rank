@@ -5,6 +5,12 @@ It does not change ranking, cache policy, provider requests, lead routing, shari
 consent policy, or request payloads. Automatic Git deployment is disabled for this
 test branch; any preview must explicitly select the existing staging environment.
 
+Browser verification also identified a pre-existing results-card grid minimum-size
+overflow: at a 360px viewport the card grew to 366px inside a 328px grid, making
+the document 382px wide before the dialog opened. The follow-up constrains the
+card's minimum width, reduces mobile-only spacing, and wraps titles/action links.
+It does not clip the page or change any data, score, eligibility or link target.
+
 ## Required behavior
 
 - A covered, reputation-eligible result card opens the actual quote dialog.
