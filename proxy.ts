@@ -26,7 +26,7 @@ function handleAdminAuth(request: NextRequest): NextResponse | null {
   if (auth.startsWith('Basic ')) {
     try {
       const encoded = auth.slice(6);
-      const decoded = atob(encoded); // Web API — available in Next.js Edge Runtime
+      const decoded = atob(encoded); // Available in the Node.js proxy runtime.
       const colonIdx = decoded.indexOf(':');
       const password = colonIdx >= 0 ? decoded.slice(colonIdx + 1) : decoded;
       // Constant-time compare: `===` exits on the first differing byte.
@@ -44,7 +44,7 @@ function handleAdminAuth(request: NextRequest): NextResponse | null {
   });
 }
 
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/admin')) {

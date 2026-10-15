@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deliverLeadToPartners } from '@/lib/leadDelivery';
 import { normalizePartnerCategory } from '@/lib/categories';
 import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { getCachedLeadBusiness, LEAD_PLACE_ID_RE } from '@/lib/leadLocation';
 
 // Loose phone pattern — accepts common formats like (555) 000-0000, +1 555 000 0000, etc.
 const PHONE_RE    = /^[\d\s\-\(\)\+\.]{7,20}$/;
-const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
+const PLACE_ID_RE = LEAD_PLACE_ID_RE;
 
 const MAX_NAME  = 120;
 const MAX_PHONE = 30;
@@ -76,9 +77,9 @@ export async function POST(request: NextRequest) {
     contact_name,
     contact_phone,
     description,
-    business_name,
     business_place_id,
     category,
+    share_with_local_partners,
   } = body as Record<string, unknown>;
 
   // Validate required fields
@@ -91,8 +92,15 @@ export async function POST(request: NextRequest) {
   if (!description || typeof description !== 'string' || !description.trim()) {
     return NextResponse.json({ error: 'Please describe what you need.' }, { status: 400 });
   }
-  if (!business_name || typeof business_name !== 'string' || !business_name.trim()) {
-    return NextResponse.json({ error: 'business_name is required' }, { status: 400 });
+  if (typeof business_place_id !== 'string' || !PLACE_ID_RE.test(business_place_id.trim())) {
+    return NextResponse.json({ error: 'A valid business is required.' }, { status: 400 });
+  }
+  if (share_with_local_partners !== true) {
+    return NextResponse.json({ error: 'Please confirm your service area and consent to local partner sharing.' }, { status: 400 });
+  }
+  const canonicalCategory = normalizePartnerCategory(typeof category === 'string' ? category : null);
+  if (!canonicalCategory) {
+    return NextResponse.json({ error: 'A supported service category is required.' }, { status: 400 });
   }
 
   // Sanitize + length-cap
@@ -100,7 +108,8 @@ export async function POST(request: NextRequest) {
     contact_name:      stripControl(contact_name).trim().slice(0, MAX_NAME),
     contact_phone:     stripControl(contact_phone).trim().slice(0, MAX_PHONE),
     description:       stripControlKeepBreaks(description).trim().slice(0, MAX_DESC),
-    business_name:     stripControl(business_name).trim().slice(0, MAX_NAME),
+    // Never trust browser-supplied names or coordinates for routing.
+    business_name:     '',
     business_place_id: (typeof business_place_id === 'string' && PLACE_ID_RE.test(business_place_id.trim()))
                          ? business_place_id.trim()
                          : null,
@@ -108,11 +117,9 @@ export async function POST(request: NextRequest) {
     // taxonomy. This collapses drift between the consumer-side ranking enum
     // (BusinessCategory — e.g. "automotive", "home_services") and the
     // partner-side slugs stored in the `partners` table (e.g. "auto-repair",
-    // "general-contractor"). Unknown or missing categories fall back to
-    // "other" so the lead is still persisted but matches no partner.
-    category:          normalizePartnerCategory(
-                         typeof category === 'string' ? category : null
-                       ) ?? 'other',
+    // "general-contractor"). Unknown categories were rejected above rather
+    // than widening matching.
+    category:          canonicalCategory,
     status: 'new',
   };
 
@@ -123,12 +130,34 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+  if (!sanitized.contact_name || !sanitized.description) {
+    return NextResponse.json({ error: 'Please enter a name and describe what you need.' }, { status: 400 });
+  }
 
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Quote requests are temporarily unavailable.' }, { status: 503 });
+    }
+    const business = await getCachedLeadBusiness(sanitized.business_place_id!);
+    if (!business) {
+      return NextResponse.json(
+        { error: 'We could not verify this service area. Reload the business page and try again.' },
+        { status: 409 }
+      );
+    }
+    sanitized.business_name = stripControl(business.name).trim().slice(0, MAX_NAME);
+    const record = {
+      ...sanitized,
+      service_area_latitude: business.location.lat,
+      service_area_longitude: business.location.lng,
+      service_area_source: 'cached_business_area',
+      partner_sharing_consented_at: new Date().toISOString(),
+    };
 
     let leadId: string | undefined;
+    let delivered = 0;
     if (supabaseUrl && supabaseKey) {
       const res = await fetch(`${supabaseUrl}/rest/v1/leads`, {
         method: 'POST',
@@ -138,12 +167,12 @@ export async function POST(request: NextRequest) {
           'Authorization': `Bearer ${supabaseKey}`,
           'Prefer':        'return=representation',
         },
-        body: JSON.stringify(sanitized),
+        body: JSON.stringify(record),
       });
 
       if (!res.ok) {
-        const detail = await res.text().catch(() => '');
-        console.error('[API /lead-request] Supabase insert error:', res.status, detail);
+        // Database diagnostics can contain submitted PII; log status only.
+        console.error('[API /lead-request] Supabase insert error:', res.status);
         return NextResponse.json(
           { error: 'Unable to submit request. Please try again.' },
           { status: 500 }
@@ -161,30 +190,24 @@ export async function POST(request: NextRequest) {
       // The partner-matching loop is fast (single Supabase select + Resend
       // sends, typically <2s total), so awaiting is worth the latency.
       try {
-        await deliverLeadToPartners({
+        delivered = await deliverLeadToPartners({
           leadId,
           category:     sanitized.category,
           businessName: sanitized.business_name,
           contactName:  sanitized.contact_name,
           contactPhone: sanitized.contact_phone,
           description:  sanitized.description,
+          lat:          business.location.lat,
+          lng:          business.location.lng,
         });
       } catch (err) {
         // Delivery failures must not block the user from submitting their
         // request. Log and continue.
         console.error('[lead-request] delivery error:', err);
       }
-    } else {
-      // Supabase not configured — log category/business info only (no PII)
-      console.log('[lead-request] New lead (Supabase not configured):', {
-        category: sanitized.category,
-        business_name: sanitized.business_name,
-        business_place_id: sanitized.business_place_id,
-        submitted_at: new Date().toISOString(),
-      });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, delivered: delivered > 0 });
   } catch (error) {
     console.error('[API /lead-request] Unexpected error:', error);
     return NextResponse.json(

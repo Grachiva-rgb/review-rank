@@ -2,11 +2,18 @@
   "name": "review-rank",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x",
+    "npm": ">=11.6.2 <12"
+  },
+  "packageManager": "npm@11.6.2",
   "scripts": {
-    "dev": "NODE_ENV=development next dev --port 3000",
-    "build": "next build",
+    "dev": "NODE_ENV=development next dev --webpack --port 3000",
+    "build": "next build --webpack",
+    "verify:build": "node scripts/verify-build.cjs",
+    "verify:smoke": "node scripts/verify-smoke.cjs",
+    "verify:native-toolchain": "node scripts/verify-native-toolchain.cjs",
     "start": "next start",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,12 +24,12 @@
     "cap:copy": "npx cap copy"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/cli": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/cli": "8.5.3",
+    "@capacitor/core": "8.5.3",
     "@capacitor/geolocation": "^8.2.0",
-    "@capacitor/ios": "^8.3.1",
-    "next": "^15.0.3",
+    "@capacitor/ios": "8.5.3",
+    "next": "^16.4.1",
     "posthog-js": "^1.372.9",
     "posthog-node": "^5.33.3",
     "react": "^18.3.1",
@@ -30,15 +37,20 @@
     "resend": "^6.12.3",
     "stripe": "^22.1.1"
   },
+  "overrides": {
+    "xcode@3.0.1": {
+      "uuid": "11.1.1"
+    }
+  },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.30",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.8"
+    "vitest": "^5.0.5"
   }
 }

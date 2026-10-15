@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import NavLogo from '@/components/NavLogo';
-
-// Access to this page is protected by HTTP Basic Auth in middleware.ts.
-// Any request reaching this component is already authenticated.
+import { requireAdminAuthorization } from '@/lib/adminAuthorization.server';
 
 interface ReportRequest {
   id: string;
@@ -46,6 +44,7 @@ async function getReportRequests(): Promise<ReportRequest[]> {
 }
 
 export default async function AdminReportsPage() {
+  await requireAdminAuthorization();
   const requests = await getReportRequests();
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 

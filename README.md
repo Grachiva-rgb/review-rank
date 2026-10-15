@@ -2,7 +2,7 @@
 
 Find the places locals trust most — ranked by real customer reviews, not paid placements.
 
-Built with Next.js 15 · Deployed on Vercel · Native mobile via Capacitor (iOS + Android).
+Built with Next.js 16 · Tailwind CSS 4 · Deployed on Vercel · Native mobile via Capacitor (iOS + Android).
 
 **Smart Score** = `rating × log₁₀(review_count + 1)`
 
@@ -32,7 +32,7 @@ required for content changes.
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | 18+ | |
+| Node.js | 24.x | Use `.nvmrc`; npm 11.6.2+ (11.x) |
 | Xcode | 15+ | macOS only, required for iOS |
 | Android Studio | Hedgehog+ | Required for Android |
 | Vercel account | — | Free tier works |
@@ -44,12 +44,103 @@ required for content changes.
 ## Local development
 
 ```bash
-npm install
-cp .env.production .env.local   # then fill in your keys
+nvm install
+nvm use
+npm ci
+# Create .env.local with development/staging credentials only if you need live integrations.
 npm run dev
 ```
 
 Open http://localhost:3000.
+
+---
+
+## Dependency and security verification
+
+The committed lockfile uses Next.js 16.4.1 (including patched PostCSS 8.5.23),
+Tailwind / its PostCSS plugin 4.3.3, root PostCSS 8.5.30, Vitest 5.0.5, and
+coordinated Capacitor 8.5.3 packages. React 18 is retained within Next's published
+peer range. Explicit Webpack flags preserve the established bundler rather than
+also adopting Next 16's default Turbopack migration. The admin request gate uses
+Next 16's `proxy.ts` convention; server-page authorization remains in place.
+Tests use Vitest's Oxc JSX transform; no Tinypool dependency remains.
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run verify:native-toolchain
+npm run verify:build
+npm run verify:smoke
+```
+
+`verify:build` performs a production-mode compilation with application/provider
+credentials blanked before dotenv loading, Next telemetry disabled, and Node
+fetch/http/https restricted to loopback and Google Fonts. Its self-test verifies
+the restrictions without contacting a provider. This is not an operating-system
+network sandbox: direct sockets and native clients are outside the interception.
+It allows font downloads but is not intended to exercise live integrations.
+Verification uses one build/render worker; normal deployments retain Next's defaults.
+Do not deploy its credential-free output; normal deployments use `npm run build`
+with the separately approved environment.
+
+On 2026-10-15, `npm audit --package-lock-only` changed from 36 flagged dependency
+entries (6 critical, 14 high, 16 moderate) to 12 (0 critical, 6 high, 6 moderate).
+This follow-up removes the vulnerable Tailwind globbing chain and upgrades
+Next's bundled PostCSS through supported parent releases, not forced transitive
+overrides. That follow-up left **3 moderate entries, 0 high and 0 critical** in
+Capacitor CLI's Xcode/UUID chain. Counts include inherited/metavulnerability
+entries, not distinct exploits.
+
+The native-toolchain follow-up retains coordinated Capacitor 8.5.3 and Xcode
+3.0.1, whose latest published releases still request UUID 7. A narrowly scoped
+`xcode@3.0.1` override selects **UUID 11.1.1**, the latest CommonJS-capable 11.x
+release and the patched threshold for GHSA-w5hq-g745-h8pq. It intentionally
+exceeds Xcode's declared UUID range: compatibility must be checked, not assumed.
+Xcode uses synchronous `require('uuid').v4()`; a blind upgrade to the latest
+ESM-only UUID release is not the chosen compatibility strategy. Remove/revisit
+the override when Xcode declares a supported patched dependency or either
+parent changes. No other UUID consumers are overridden.
+
+`verify:native-toolchain` checks actual CLI-to-Xcode-to-UUID resolution, UUID
+buffer bounds and ID generation, the real Capacitor Swift-file registration
+helper against a temporary copy of the tracked Xcode project, idempotency and
+CLI startup. It does not write the original project, run native sync, compile,
+sign or distribute an app. Provider credentials are stripped and the same
+Node network guard is installed. This is API/project-file compatibility
+coverage, not macOS/Xcode or device QA.
+
+The 2026-10-15 locked audit reports **zero findings at every severity** after
+this fix; the three moderate inherited entries are removed.
+CI audits **all severities** (`--audit-level=info`) without suppressing findings.
+Always rerun the current audit; a zero report is not proof that every dependency
+is vulnerability-free. Issue #15 remains open for overall release verification.
+`next lint` was removed in Next 16; no lint command is advertised until an ESLint
+configuration is supplied.
+
+After the guarded build, `verify:smoke` starts only a loopback server with the
+same credential-stripping network guard. It verifies homepage SSR/security
+headers, fail-closed admin proxy behavior, short-input autocomplete (which
+returns before database/provider access), API no-store headers, and immutable
+static-asset caching. It does not exercise paid/live-provider workflows.
+
+### Browser and mobile compatibility release gate
+
+Tailwind 4 raises the styling baseline to **Safari 16.4+, Chrome 111+ and Firefox
+128+**. Confirm that this is acceptable for the supported audience before
+merging/deploying; older iOS WebViews can otherwise lose styling. Native device
+QA remains required. Compatibility CSS preserves legacy brand/named colors,
+shadows, focus outlines, responsive utilities and safe-area precedence. Automated
+CSS checks are not a substitute for real-device search/detail/forms/travel and
+Stripe test-mode verification. Cache keys, retention policy, provider-fetch
+code and lead-matching logic are unchanged.
+
+Admin pages also revalidate Basic Auth on the server before fetching private
+records, rather than relying exclusively on middleware matching.
+
+Updating Capacitor packages does **not** patch installed mobile apps. An approved
+native sync, signed rebuild, device testing, and redistribution are still needed;
+no mobile release is performed by these verification commands.
 
 ---
 

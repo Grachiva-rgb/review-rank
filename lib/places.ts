@@ -364,7 +364,7 @@ export function categorizePlace(name: string, primaryType?: string) {
  * caching place data for up to 30 days; 14 keeps ratings/reviews fresh enough
  * for a detail page while capping spend at ~2 calls/business/month worst case.
  */
-const PLACE_DETAILS_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+export const PLACE_DETAILS_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 function buildPlaceDetailsCacheKey(placeId: string): string {
   return `place_details:${placeId}`;
@@ -416,12 +416,6 @@ async function setCachedPlaceDetails(
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
-  }
-
   // NOTE: photos intentionally excluded — nothing in the UI renders them, so
   // requesting them only inflated the response and the billing tier.
   const fieldMask = [
@@ -446,6 +440,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
   let p = await getCachedPlaceDetails(placeId);
 
   if (!p) {
+    // A fresh stored response needs no provider credential or Google request.
+    // Require the key only for a real cache miss; never fall back to stale data.
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
+    }
+
     const response = await fetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`, {
       headers: {
         'X-Goog-Api-Key': apiKey,

@@ -10,6 +10,11 @@ const CAPACITOR_ORIGINS = [
 ].join(' ');
 
 const nextConfig: NextConfig = {
+  // Only the credential-free verification build limits parallel workers.
+  // Normal deployments retain Next's defaults; request/cache behavior is unchanged.
+  ...(process.env.REVIEWRANK_VERIFY_BUILD === '1'
+    ? { experimental: { cpus: 1 } }
+    : {}),
   images: {
     remotePatterns: [
       {

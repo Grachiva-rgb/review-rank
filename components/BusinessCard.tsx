@@ -54,9 +54,9 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
   const detailHref = `/business/${place.place_id}?cat=${encodeURIComponent(category)}`;
 
   return (
-    <div className="group relative flex gap-5 rounded-2xl border border-[#EDE8E3] bg-white px-5 py-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-[#D9CEC8]">
+    <div className="group relative flex min-w-0 w-full gap-3 sm:gap-5 rounded-2xl border border-[#EDE8E3] bg-white px-4 sm:px-5 py-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-[#D9CEC8]">
       {/* Rank numeral */}
-      <div className="flex-shrink-0 w-9 pt-0.5 text-right">
+      <div className="flex-shrink-0 w-7 sm:w-9 pt-0.5 text-right">
         <span className={`font-display text-3xl font-bold leading-none select-none ${rankColor}`}>
           {rank}
         </span>
@@ -69,8 +69,8 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
       <div className="flex-1 min-w-0">
         {/* Name + rising-star flag */}
         <div className="flex items-start gap-2 flex-wrap mb-1">
-          <Link href={detailHref}>
-            <h3 className="font-display text-lg font-semibold leading-snug text-[#241C15] group-hover:text-[#8B5E3C] transition-colors">
+          <Link href={detailHref} className="min-w-0 max-w-full">
+            <h3 className="font-display text-lg font-semibold leading-snug break-words text-[#241C15] group-hover:text-[#8B5E3C] transition-colors">
               {place.name}
             </h3>
           </Link>
@@ -135,14 +135,13 @@ export default function BusinessCard({ place, rank, category = 'general' }: Busi
           <QuoteButton
             businessName={place.name}
             businessId={place.place_id}
+            businessAddress={place.formatted_address}
             category={category}
-            lat={place.geometry.location.lat}
-            lng={place.geometry.location.lng}
           />
         )}
 
         {/* Links */}
-        <div className="flex items-center gap-1 mt-1 -mx-2">
+        <div className="flex flex-wrap items-center gap-1 mt-1 -mx-2">
           <a
             href={mapsUrl}
             target="_blank"

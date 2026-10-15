@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import NavLogo from '@/components/NavLogo';
-
-// Access to this page is protected by HTTP Basic Auth in middleware.ts.
-// Any request reaching this component is already authenticated.
+import { requireAdminAuthorization } from '@/lib/adminAuthorization.server';
 
 interface Lead {
   id: string;
@@ -59,6 +57,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default async function AdminLeadsPage() {
+  await requireAdminAuthorization();
   const leads = await getLeads();
   const supabaseConfigured = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 

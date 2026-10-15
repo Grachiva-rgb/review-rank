@@ -1,10 +1,6 @@
-# CI: typecheck + scoring regression tests on every push/PR.
-#
-# The build itself runs on Vercel (deployment preview per PR), so this
-# workflow covers what Vercel does not: the scoring-engine regression suite
-# that pins known values, boundaries, and missing-data behavior, plus a full
-# TypeScript pass. `next lint` is deliberately absent — the repo has no
-# ESLint config, and running it unconfigured prompts interactively.
+# CI uses the same Node LTS line and committed npm lockfile as local verification.
+# The controlled build removes provider credentials and blocks non-font external
+# requests, so prerendering cannot spend a live API budget or contact customers.
 name: CI
 
 on:
@@ -15,19 +11,34 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
-      - name: Install dependencies
+      - name: Install dependencies from the committed lockfile
         run: npm ci
+
+      # The scoped Xcode/UUID fix removes the remaining moderate chain.
+      # Fail on every reported severity; do not suppress inherited findings.
+      - name: Audit for dependency regressions at every severity
+        run: npm audit --package-lock-only --audit-level=info
+
+      - name: Native toolchain compatibility without a native build
+        run: npm run verify:native-toolchain
 
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Scoring regression tests
+      - name: Unit and security regression tests
         run: npm test
+
+      - name: Controlled production-mode build
+        run: npm run verify:build
+
+      - name: Credential-free HTTP and cache-header smoke tests
+        run: npm run verify:smoke
