@@ -18,7 +18,7 @@ workflows:
         CAPACITOR_SERVER_URL: $VERCEL_URL
         KEYSTORE_PATH: /tmp/reviewrank-release.keystore
         KEY_ALIAS: reviewrank
-      node: 22.11.0
+      node: "24"
       java: 21
     scripts:
       - name: Install dependencies
@@ -80,7 +80,7 @@ workflows:
   #       - reviewrank_credentials
   #     vars:
   #       CAPACITOR_SERVER_URL: $VERCEL_URL
-  #     node: 22.11.0
+  #     node: "24"
   #     xcode: latest
   #   scripts:
   #     - name: Install dependencies

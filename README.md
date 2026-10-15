@@ -32,7 +32,7 @@ required for content changes.
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | 18+ | |
+| Node.js | 24.x | Use `.nvmrc`; npm 11.6.2+ (11.x) |
 | Xcode | 15+ | macOS only, required for iOS |
 | Android Studio | Hedgehog+ | Required for Android |
 | Vercel account | — | Free tier works |
@@ -44,12 +44,57 @@ required for content changes.
 ## Local development
 
 ```bash
-npm install
-cp .env.production .env.local   # then fill in your keys
+nvm install
+nvm use
+npm ci
+# Create .env.local with development/staging credentials only if you need live integrations.
 npm run dev
 ```
 
 Open http://localhost:3000.
+
+---
+
+## Dependency and security verification
+
+The committed lockfile uses Next.js 15.5.28, Vitest 5.0.5, and coordinated
+Capacitor 8.5.3 packages. React 18 and Tailwind 3 are retained to avoid combining
+this security update with framework/UI major-version migrations. Tests use
+Vitest's Oxc JSX transform; no Tinypool dependency remains in the lockfile.
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run verify:build
+```
+
+`verify:build` performs a production-mode compilation with application/provider
+credentials blanked before dotenv loading, Next telemetry disabled, and Node
+fetch/http/https restricted to loopback and Google Fonts. Its self-test verifies
+the restrictions without contacting a provider. This is not an operating-system
+network sandbox: direct sockets and native clients are outside the interception.
+It allows font downloads but is not intended to exercise live integrations.
+Verification uses one build/render worker; normal deployments retain Next's defaults.
+Do not deploy its credential-free output; normal deployments use `npm run build`
+with the separately approved environment.
+
+On 2026-10-15, `npm audit --package-lock-only` changed from 36 flagged dependency
+entries (6 critical, 14 high, 16 moderate) to 12 (0 critical, 6 high, 6 moderate).
+These include inherited/metavulnerability entries, not 36 or 12 distinct exploits.
+Remaining findings are in the transitive CSS and native build-tool chains,
+including Next's nested PostCSS, Tailwind dependencies, and Capacitor CLI's
+Xcode/UUID dependency. Some are classified as production dependencies by npm.
+This is **not a clean audit**; run the audit again and review current advisories
+before release. CI adds a critical-regression gate without suppressing the
+remaining findings; issue #15 stays open for follow-up.
+
+Admin pages also revalidate Basic Auth on the server before fetching private
+records, rather than relying exclusively on middleware matching.
+
+Updating Capacitor packages does **not** patch installed mobile apps. An approved
+native sync, signed rebuild, device testing, and redistribution are still needed;
+no mobile release is performed by these verification commands.
 
 ---
 
