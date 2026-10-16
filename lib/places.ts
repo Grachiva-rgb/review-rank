@@ -5,6 +5,8 @@ import { getCachedTAEnrichment } from './tripadvisor';
 import { getConfidence } from './scoreBands';
 import { computeMultiSourceScore } from './multiSourceScoring';
 import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
+import { enforceGoogleApiDailyLimit } from './ratelimit';
+import { GoogleApiBudgetError } from './googleApiBudgetError';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -98,7 +100,7 @@ export const SEO_SEARCH_CACHE_TTL_MS = 6.5 * 24 * 60 * 60 * 1000; // ~6.5 days
  * Lat/lng are rounded to 3 decimal places (~110 m precision) so nearby
  * searches with fractionally different coords hit the same cache entry.
  */
-function buildSearchCacheKey(query: string, options?: SearchOptions): string {
+export function buildSearchCacheKey(query: string, options?: SearchOptions): string {
   const q = query.trim().toLowerCase();
   const lat = options?.lat != null ? Math.round(options.lat * 1000) / 1000 : '';
   const lng = options?.lng != null ? Math.round(options.lng * 1000) / 1000 : '';
@@ -181,17 +183,23 @@ async function getCachedSampleRatings(
 }
 
 export async function searchPlaces(query: string, options?: SearchOptions): Promise<Place[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
-  }
-
   // Check Supabase cache before calling Google — saves a billed API call for
   // any query repeated inside the caller's freshness window.
   const cacheKey = buildSearchCacheKey(query, options);
   const cached = await getCachedSearch(cacheKey, options?.cacheTtlMs ?? SEARCH_CACHE_TTL_MS);
   if (cached) return cached;
+
+  // A build may prerender only content already present in the persistent cache.
+  // NEXT_PHASE is set by Next.js itself for production builds; never turn a
+  // cache timeout/miss during that phase into a paid upstream search.
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    throw new GoogleApiBudgetError('Google Places cache is required during production build.');
+  }
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
+  }
 
   // NOTE: reviews intentionally excluded here — requesting reviews elevates the
   // call to the most expensive billing tier. Reviews are only fetched in
@@ -219,6 +227,17 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
         radius: options.radiusMeters ?? 5000,
       },
     };
+  }
+
+  // Supabase's existing cache is checked above; this conservative gate runs
+  // after its miss and before fetch. Next's fetch cache may still satisfy it.
+  const requestBudget = await enforceGoogleApiDailyLimit('search');
+  if (!requestBudget.allowed) {
+    throw new GoogleApiBudgetError(
+      requestBudget.unavailable
+        ? 'Google Places request protection is unavailable.'
+        : 'Google Places daily request limit reached.'
+    );
   }
 
   const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
@@ -445,6 +464,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
     if (!apiKey) {
       throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
+    }
+
+    const requestBudget = await enforceGoogleApiDailyLimit('details');
+    if (!requestBudget.allowed) {
+      throw new GoogleApiBudgetError(
+        requestBudget.unavailable
+          ? 'Google Places request protection is unavailable.'
+          : 'Google Places daily request limit reached.'
+      );
     }
 
     const response = await fetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`, {

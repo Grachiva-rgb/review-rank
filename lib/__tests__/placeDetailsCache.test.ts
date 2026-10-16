@@ -7,6 +7,7 @@ const {
   sbUpsertMock,
   getCachedTAEnrichmentMock,
   rateLimitMock,
+  enforceGoogleApiDailyLimitMock,
   clientIpMock,
 } = vi.hoisted(() => ({
   isSupabaseConfiguredMock: vi.fn(),
@@ -14,6 +15,7 @@ const {
   sbUpsertMock: vi.fn(),
   getCachedTAEnrichmentMock: vi.fn(),
   rateLimitMock: vi.fn(),
+  enforceGoogleApiDailyLimitMock: vi.fn(),
   clientIpMock: vi.fn(),
 }));
 
@@ -30,10 +32,16 @@ vi.mock('../tripadvisor', async (importOriginal) => ({
 
 vi.mock('../ratelimit', () => ({
   rateLimit: rateLimitMock,
+  rateLimitAsync: rateLimitMock,
+  enforceGoogleApiDailyLimit: enforceGoogleApiDailyLimitMock,
+  enforceGooglePlacesDailyLimit: enforceGoogleApiDailyLimitMock,
   clientIp: clientIpMock,
 }));
 
-import { getPlaceDetails } from '../places';
+import * as placesModule from '../places';
+import { getPlaceDetails, searchPlaces } from '../places';
+import { GoogleApiBudgetError } from '../googleApiBudgetError';
+import { generateMetadata as businessGenerateMetadata } from '../../app/business/[id]/page';
 import { GET as getPlaceDetailsRoute } from '../../app/api/place-details/route';
 
 const PLACE_ID = 'ChIJ/cache-test?&';
@@ -66,6 +74,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://supabase.example.invalid');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-test-placeholder');
   rateLimitMock.mockReset().mockReturnValue({ allowed: true });
+  enforceGoogleApiDailyLimitMock.mockReset().mockResolvedValue({ allowed: true });
   clientIpMock.mockReset().mockReturnValue('synthetic-test-client');
   isSupabaseConfiguredMock.mockReset().mockReturnValue(true);
   sbSelectMock.mockReset().mockResolvedValue([]);
@@ -83,6 +92,23 @@ afterEach(() => {
 });
 
 describe('getPlaceDetails cache-only behavior', () => {
+  it('preserves business-specific SEO metadata and serves its detail from fresh cache without budget/provider calls', async () => {
+    sbSelectMock.mockResolvedValueOnce(cachedRows(GOOGLE_RESPONSE));
+    const getDetailsSpy = vi.spyOn(placesModule, 'getPlaceDetails');
+
+    const metadata = await businessGenerateMetadata({
+      params: Promise.resolve({ id: ROUTE_PLACE_ID }),
+      searchParams: Promise.resolve({}),
+    });
+
+    expect(metadata.title).toBe('Cache Test Cafe — ReviewRank Score & Trust Analysis');
+    expect(metadata.description).toContain('123 reviews');
+    expect(getDetailsSpy).toHaveBeenCalledWith(ROUTE_PLACE_ID);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    getDetailsSpy.mockRestore();
+  });
+
   it.each([
     ['unset', undefined],
     ['blank', ''],
@@ -101,6 +127,7 @@ describe('getPlaceDetails cache-only behavior', () => {
       user_ratings_total: 123,
     });
     expect(fetch).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(sbSelectMock).toHaveBeenCalledTimes(1);
     expect(sbSelectMock).toHaveBeenCalledWith(
       'search_cache',
@@ -116,7 +143,50 @@ describe('getPlaceDetails cache-only behavior', () => {
 
     expect(detail.name).toBe('Cache Test Cafe');
     expect(fetch).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(sbUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it('serves cached search results without calling the shared Places budget RPC', async () => {
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+    const cachedResult = [{ place_id: 'cached-place', name: 'Cached Business' }];
+    sbSelectMock.mockResolvedValueOnce([{ results: cachedResult }]);
+
+    await expect(searchPlaces('cached query')).resolves.toEqual(cachedResult);
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('serves cached search results during production build without a Google key or budget call', async () => {
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', '');
+    const cachedResult = [{ place_id: 'build-cached-place', name: 'Build Cached Business' }];
+    sbSelectMock.mockResolvedValueOnce([{ results: cachedResult }]);
+
+    await expect(searchPlaces('build cached query')).resolves.toEqual(cachedResult);
+
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('blocks production-build search cache misses with a typed error before budget or Google', async () => {
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+
+    await expect(searchPlaces('build cache miss query')).rejects.toBeInstanceOf(GoogleApiBudgetError);
+
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('routes uncached text searches through the search-specific budget', async () => {
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+
+    await expect(searchPlaces('uncached search query')).resolves.toEqual([]);
+
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('search');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('/places:searchText');
   });
 
   it('serves the minimal existing staging fixture without a provider key', async () => {
@@ -209,6 +279,7 @@ describe('getPlaceDetails cache-only behavior', () => {
     expect(options.headers['X-Goog-FieldMask']).toContain('id,displayName');
     expect(options.headers['X-Goog-FieldMask']).toContain('reviews');
     expect(options.next).toEqual({ revalidate: 3600 });
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('details');
     expect(sbUpsertMock).toHaveBeenCalledWith(
       'search_cache',
       expect.objectContaining({
@@ -227,6 +298,16 @@ describe('getPlaceDetails cache-only behavior', () => {
 
     await expect(getPlaceDetails(PLACE_ID)).rejects.toThrow('Synthetic provider rejection');
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call Google when the shared daily cap denies a cache miss', async () => {
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+    enforceGoogleApiDailyLimitMock.mockResolvedValueOnce({ allowed: false });
+
+    await expect(getPlaceDetails(PLACE_ID)).rejects.toThrow(/daily request limit/);
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('details');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(sbUpsertMock).not.toHaveBeenCalled();
   });
 });
 

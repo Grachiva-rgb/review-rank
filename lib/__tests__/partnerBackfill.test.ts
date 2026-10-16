@@ -18,6 +18,7 @@ beforeEach(() => {
   m.update.mockReset().mockResolvedValue(null);
   m.geocode.mockReset().mockResolvedValue({ lat: 41.24, lng: -81.44 });
   vi.stubEnv('GOOGLE_PLACES_API_KEY', 'mock-only');
+  vi.stubEnv('RATE_LIMIT_BACKEND', 'supabase');
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
@@ -70,5 +71,22 @@ describe('manual bounded partner-location backfill', () => {
     await expect(runBackfill(['--apply'])).rejects.toThrow('configuration');
     m.configured = false;
     await expect(runBackfill([])).rejects.toThrow('Supabase');
+  });
+  it.each([undefined, '', 'local', 'invalid'])(
+    'refuses apply without the shared backend (%s) before any reads or writes',
+    async (backend) => {
+      vi.stubEnv('RATE_LIMIT_BACKEND', backend as unknown as string);
+      await expect(runBackfill(['--apply'])).rejects.toThrow('Shared Google budget');
+      expect(m.select).not.toHaveBeenCalled();
+      expect(m.geocode).not.toHaveBeenCalled();
+      expect(m.update).not.toHaveBeenCalled();
+    }
+  );
+  it('still permits a zero-provider dry run without shared-budget activation', async () => {
+    vi.stubEnv('RATE_LIMIT_BACKEND', undefined as unknown as string);
+    await runBackfill([]);
+    expect(m.select).toHaveBeenCalledOnce();
+    expect(m.geocode).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
   });
 });

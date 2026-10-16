@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripe, isStripeConfigured, PARTNER_MONTHLY_CENTS } from '@/lib/stripe';
 import { isSupabaseConfigured, sbInsert } from '@/lib/supabase';
 import { normalizePartnerCategory } from '@/lib/categories';
-import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp } from '@/lib/ratelimit';
 import { resolvePartnerServiceCenter, validServiceCity } from '@/lib/partnerLocation';
 
 const MAX_STR = 120;
@@ -10,9 +10,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATE_RE = /^[A-Za-z]{2}$/;
 
 export async function POST(req: NextRequest) {
-  const { allowed } = rateLimit(`partner-checkout:${clientIp(req)}`, 5, 1_800_000);
+  const verdict = await rateLimitAsync(`partner-checkout:${clientIp(req)}`, 5, 1_800_000);
+  const { allowed } = verdict;
   if (!allowed) {
-    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    return NextResponse.json(
+      { error: verdict.unavailable ? 'Request protection is temporarily unavailable.' : 'Too many requests. Please try again later.' },
+      { status: verdict.unavailable ? 503 : 429 }
+    );
   }
 
   if (!isStripeConfigured()) {

@@ -9,7 +9,8 @@
     "deploymentEnabled": {
       "verify/combined-staging-22-25": false,
       "fix/cache-only-place-details": false,
-      "fix/quote-modal-accessibility": false
+      "fix/quote-modal-accessibility": false,
+      "fix/production-security-hardening": false
     }
   }
 }

@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Security-only npm PRs; enabling automated security updates is a separate
+  # repository setting. Zero disables routine version PRs, not security fixes.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"

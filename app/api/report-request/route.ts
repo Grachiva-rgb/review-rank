@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp } from '@/lib/ratelimit';
 
 const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PLACE_ID_RE = /^[A-Za-z0-9_-]{10,100}$/;
@@ -8,9 +8,13 @@ const MAX_EMAIL_LEN = 254;
 const MAX_NOTE_LEN = 1000;
 
 export async function POST(request: NextRequest) {
-  const { allowed } = rateLimit(`report-request:${clientIp(request)}`, 5, 3_600_000);
+  const verdict = await rateLimitAsync(`report-request:${clientIp(request)}`, 5, 3_600_000);
+  const { allowed } = verdict;
   if (!allowed) {
-    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    return NextResponse.json(
+      { error: verdict.unavailable ? 'Request protection is temporarily unavailable.' : 'Too many requests. Please try again later.' },
+      { status: verdict.unavailable ? 503 : 429 }
+    );
   }
 
   let body: unknown;

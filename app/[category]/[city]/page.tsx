@@ -4,6 +4,8 @@ import { jsonLd } from '@/lib/jsonLd';
 import Link from 'next/link';
 import { searchPlaces, SEO_SEARCH_CACHE_TTL_MS } from '@/lib/places';
 import { SEO_CATEGORIES, SEO_CITIES, getCategoryBySlug, getCityBySlug } from '@/lib/seo';
+import { getFreshSeoStaticParams } from '@/lib/seoStaticParams';
+import { rethrowIfGoogleApiBudgetError } from '@/lib/googleApiBudgetError';
 import NavLogo from '@/components/NavLogo';
 import BusinessCard from '@/components/BusinessCard';
 import GoogleMapsAttribution from '@/components/GoogleMapsAttribution';
@@ -21,9 +23,7 @@ interface PageProps {
 }
 
 export async function generateStaticParams() {
-  return SEO_CATEGORIES.flatMap((cat) =>
-    SEO_CITIES.map((city) => ({ category: cat.slug, city: city.slug }))
-  );
+  return getFreshSeoStaticParams();
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -66,7 +66,8 @@ export default async function CategoryCityPage({ params }: PageProps) {
       cacheTtlMs: SEO_SEARCH_CACHE_TTL_MS,
     });
     places.sort((a, b) => b.review_rank_score - a.review_rank_score);
-  } catch {
+  } catch (error) {
+    rethrowIfGoogleApiBudgetError(error);
     fetchError = true;
   }
 

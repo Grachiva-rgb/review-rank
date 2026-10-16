@@ -23,6 +23,11 @@ export async function runBackfill(args: string[]): Promise<void> {
   if (!isSupabaseConfigured()) throw new Error('Server-side Supabase configuration is required');
   const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? '';
   if (apply && !apiKey) throw new Error('Geocoding configuration is required for --apply');
+  // A standalone operator process does not inherit Vercel's shared-budget
+  // settings automatically. Never let --apply silently use local enforcement.
+  if (apply && process.env.RATE_LIMIT_BACKEND !== 'supabase') {
+    throw new Error('Shared Google budget configuration is required for --apply');
+  }
   const rows = await sbSelect<{
     id: string; city: string | null; state: string | null; service_radius_miles: number;
   }>('partners',

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchPlaces, normalizeBusiness } from '@/lib/places';
-import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp } from '@/lib/ratelimit';
 
 const MAX_QUERY_LENGTH = 200;
 
 export async function GET(request: NextRequest) {
-  const { allowed } = rateLimit(`places:${clientIp(request)}`, 30, 60_000);
+  const verdict = await rateLimitAsync(`places:${clientIp(request)}`, 30, 60_000);
+  const { allowed } = verdict;
   if (!allowed) {
-    return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
+    return NextResponse.json(
+      { error: verdict.unavailable ? 'Request protection is temporarily unavailable.' : 'Too many requests. Please slow down.' },
+      { status: verdict.unavailable ? 503 : 429 }
+    );
   }
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('q');

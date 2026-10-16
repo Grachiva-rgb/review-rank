@@ -10,6 +10,7 @@ const CAPACITOR_ORIGINS = [
 ].join(' ');
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Only the credential-free verification build limits parallel workers.
   // Normal deployments retain Next's defaults; request/cache behavior is unchanged.
   ...(process.env.REVIEWRANK_VERIFY_BUILD === '1'
@@ -61,6 +62,9 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
               // static.cloudflareinsights.com: Cloudflare Web Analytics beacon
               "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
