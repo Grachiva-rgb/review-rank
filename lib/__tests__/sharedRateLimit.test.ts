@@ -139,15 +139,46 @@ describe('rateLimitAsync', () => {
     vi.stubEnv('RATE_LIMIT_BACKEND', 'supabase');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://db.example.test');
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-only-secret');
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      markStarted();
+      init.signal!.addEventListener('abort', () => reject(new Error('Synthetic request aborted')), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const result = rateLimitAsync('sensitive-key', 1, 1000);
+    // Wait for native WebCrypto before advancing mocked time. Otherwise crypto
+    // may finish after test teardown and touch the following test's fetch mock.
+    await started;
     await vi.advanceTimersByTimeAsync(1500);
     expect(await result).toEqual({
       allowed: false,
       unavailable: true,
     });
     expect(consoleError).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].signal!.aborted).toBe(true);
+  });
+
+  it('never starts an RPC when the deadline expires during identity hashing', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('RATE_LIMIT_BACKEND', 'supabase');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://db.example.test');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-only-secret');
+    vi.spyOn(crypto.subtle, 'importKey').mockResolvedValue({} as CryptoKey);
+    let finishHash!: (value: ArrayBuffer) => void;
+    vi.spyOn(crypto.subtle, 'sign').mockImplementation(() => new Promise<ArrayBuffer>((resolve) => {
+      finishHash = resolve;
+    }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const result = rateLimitAsync('slow-identity', 1, 1000);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(await result).toEqual({ allowed: false, unavailable: true });
+    finishHash(new ArrayBuffer(32));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

@@ -81,7 +81,9 @@ export async function sharedRateLimit(
     const rpc = (async (): Promise<SharedRateLimitResult> => {
       try {
         const keyHash = await hmacKey(key, config.serviceKey, windowMs);
-        if (!keyHash) return { allowed: false, unavailable: true };
+        // Crypto is asynchronous too. If the overall deadline elapsed while
+        // computing the identity, never launch a late RPC (even a mocked one).
+        if (!keyHash || controller.signal.aborted) return { allowed: false, unavailable: true };
         const response = await fetch(`${config.url}/rest/v1/rpc/reviewrank_rate_limit`, {
           method: 'POST',
           headers: {
