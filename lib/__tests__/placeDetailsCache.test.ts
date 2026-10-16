@@ -40,6 +40,7 @@ vi.mock('../ratelimit', () => ({
 
 import * as placesModule from '../places';
 import { getPlaceDetails, searchPlaces } from '../places';
+import { GoogleApiBudgetError } from '../googleApiBudgetError';
 import { generateMetadata as businessGenerateMetadata } from '../../app/business/[id]/page';
 import { GET as getPlaceDetailsRoute } from '../../app/api/place-details/route';
 
@@ -152,6 +153,28 @@ describe('getPlaceDetails cache-only behavior', () => {
     sbSelectMock.mockResolvedValueOnce([{ results: cachedResult }]);
 
     await expect(searchPlaces('cached query')).resolves.toEqual(cachedResult);
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('serves cached search results during production build without a Google key or budget call', async () => {
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', '');
+    const cachedResult = [{ place_id: 'build-cached-place', name: 'Build Cached Business' }];
+    sbSelectMock.mockResolvedValueOnce([{ results: cachedResult }]);
+
+    await expect(searchPlaces('build cached query')).resolves.toEqual(cachedResult);
+
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('blocks production-build search cache misses with a typed error before budget or Google', async () => {
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+
+    await expect(searchPlaces('build cache miss query')).rejects.toBeInstanceOf(GoogleApiBudgetError);
+
     expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });

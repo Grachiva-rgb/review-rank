@@ -14,6 +14,12 @@ Do not treat a merged application change as completion of every infrastructure g
 - Business detail throttling runs in the proxy before page AND metadata rendering.
   The page's daily ISR, business-specific SEO metadata, and persistent caches remain
   intact; do not add request headers to that page simply to meter it.
+- SEO prerendering selects only seeded category/city pages with fresh stored
+  search results. Other existing URLs remain available through on-demand
+  rendering with the same metadata and weekly ISR interval. During Next's
+  production-build phase, search is cache-only: cache failures do not spend
+  visitors' Google quota. Budget failures are rethrown by SEO rendering so a
+  failed refresh does not replace a previous good ISR page with empty rankings.
 - RPC keys are HMACs, not raw IP addresses. Shared state uses the database clock,
   atomic counters, bounded indexed cleanup, RLS and service-role-only RPC access.
   Fixed windows can permit a burst across a boundary; this is not a rolling window.

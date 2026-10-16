@@ -70,6 +70,16 @@ async function main() {
     assert.match(home.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
     console.log('PASS homepage SSR and security headers');
 
+    // SEO paths omitted from the cache-only prerender list must still render
+    // on demand. With credentials blanked, this must use the established
+    // unavailable-data view, not retain the build-only quota-error condition.
+    const seo = await request('/plumbers/cleveland-oh');
+    assert.equal(seo.status, 200, 'An on-demand SEO route must render without provider credentials');
+    const seoHtml = await seo.text();
+    assert.ok(seoHtml.includes('https://verification.example.invalid/plumbers/cleveland-oh'),
+      'On-demand SEO canonical metadata must remain intact');
+    console.log('PASS on-demand SEO rendering and canonical metadata after cache-only build');
+
     const admin = await request('/admin/leads');
     assert.equal(admin.status, 503, 'Admin must fail closed without a configured secret');
     assert.match(admin.headers.get('cache-control') || '', /no-store/);
