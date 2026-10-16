@@ -8,14 +8,30 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_DB: reviewrank_rate_limit_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -36,6 +52,12 @@ jobs:
 
       - name: Unit and security regression tests
         run: npm test
+
+      - name: Isolated shared-limiter SQL and concurrent-request tests
+        run: node scripts/verify-rate-limit.cjs
+        env:
+          REVIEWRANK_TEST_PG_HOST: 127.0.0.1
+          REVIEWRANK_TEST_PG_PORT: '5432'
 
       - name: Controlled production-mode build
         run: npm run verify:build

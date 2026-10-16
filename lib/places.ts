@@ -5,6 +5,7 @@ import { getCachedTAEnrichment } from './tripadvisor';
 import { getConfidence } from './scoreBands';
 import { computeMultiSourceScore } from './multiSourceScoring';
 import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
+import { enforceGooglePlacesDailyLimit } from './ratelimit';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -219,6 +220,17 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
         radius: options.radiusMeters ?? 5000,
       },
     };
+  }
+
+  // Supabase's existing cache is checked above; this conservative gate runs
+  // after its miss and before fetch. Next's fetch cache may still satisfy it.
+  const requestBudget = await enforceGooglePlacesDailyLimit();
+  if (!requestBudget.allowed) {
+    throw new Error(
+      requestBudget.unavailable
+        ? 'Google Places request protection is unavailable.'
+        : 'Google Places daily request limit reached.'
+    );
   }
 
   const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
@@ -445,6 +457,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
     const apiKey = process.env.GOOGLE_PLACES_API_KEY;
     if (!apiKey) {
       throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
+    }
+
+    const requestBudget = await enforceGooglePlacesDailyLimit();
+    if (!requestBudget.allowed) {
+      throw new Error(
+        requestBudget.unavailable
+          ? 'Google Places request protection is unavailable.'
+          : 'Google Places daily request limit reached.'
+      );
     }
 
     const response = await fetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`, {

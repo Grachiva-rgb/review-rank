@@ -10,7 +10,12 @@ vi.mock('../partnerLocation', async () => {
   const actual = await vi.importActual<typeof import('../partnerLocation')>('../partnerLocation');
   return { ...actual, resolvePartnerServiceCenter: m.geocode };
 });
-vi.mock('../ratelimit', () => ({ rateLimit: () => ({ allowed: true }), clientIp: () => 'test' }));
+vi.mock('../ratelimit', () => ({
+  rateLimit: () => ({ allowed: true }),
+  rateLimitAsync: async () => ({ allowed: true }),
+  enforceGooglePlacesDailyLimit: async () => ({ allowed: true }),
+  clientIp: () => 'test',
+}));
 vi.mock('../stripe', () => ({
   PARTNER_MONTHLY_CENTS: 9900,
   isStripeConfigured: () => m.stripeConfigured,

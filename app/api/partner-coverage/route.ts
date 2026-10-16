@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePartnerCategory } from '@/lib/categories';
-import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp } from '@/lib/ratelimit';
 import { getCachedLeadBusiness, LEAD_PLACE_ID_RE } from '@/lib/leadLocation';
 import { findMatchingPartners } from '@/lib/partnerMatching';
 
@@ -14,9 +14,10 @@ import { findMatchingPartners } from '@/lib/partnerMatching';
  * Response is cached for 5 minutes at the CDN layer.
  */
 export async function GET(request: NextRequest) {
-  const { allowed } = rateLimit(`partner-coverage:${clientIp(request)}`, 60, 60_000);
+  const verdict = await rateLimitAsync(`partner-coverage:${clientIp(request)}`, 60, 60_000);
+  const { allowed } = verdict;
   if (!allowed) {
-    return NextResponse.json({ hasPartner: false }, { status: 429 });
+    return NextResponse.json({ hasPartner: false }, { status: verdict.unavailable ? 503 : 429 });
   }
 
   const { searchParams } = request.nextUrl;

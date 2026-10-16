@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { secretMatches } from '@/lib/timingSafe';
+import { clientIp, rateLimitAsync } from '@/lib/ratelimit';
 
 /**
  * Admin authentication via HTTP Basic Auth.
@@ -11,13 +12,23 @@ import { secretMatches } from '@/lib/timingSafe';
  * which leaked the secret into browser history, server logs, CDN access logs,
  * and rendered HTML.
  */
-function handleAdminAuth(request: NextRequest): NextResponse | null {
+async function handleAdminAuth(request: NextRequest): Promise<NextResponse | null> {
   const adminSecret = process.env.ADMIN_SECRET;
 
   if (!adminSecret) {
     return NextResponse.json(
       { error: 'Admin access is not configured.' },
       { status: 503 }
+    );
+  }
+
+  // Count attempts BEFORE comparing credentials: a correct guess must not bypass
+  // an exhausted budget. Valid admin navigation uses the same 30/minute budget.
+  const verdict = await rateLimitAsync(`admin:${clientIp(request)}`, 30, 60_000);
+  if (!verdict.allowed) {
+    return NextResponse.json(
+      { error: verdict.unavailable ? 'Admin access protection is unavailable.' : 'Too many admin access attempts.' },
+      { status: verdict.unavailable ? 503 : 429, headers: { 'Retry-After': '60' } }
     );
   }
 
@@ -44,17 +55,35 @@ function handleAdminAuth(request: NextRequest): NextResponse | null {
   });
 }
 
-export function proxy(request: NextRequest): NextResponse {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/admin')) {
-    const authResult = handleAdminAuth(request);
-    if (authResult) return authResult;
+    const authResult = await handleAdminAuth(request);
+    const response = authResult ?? NextResponse.next();
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    return response;
+  }
+
+  // Run before BOTH metadata and page rendering, without adding headers() to
+  // the business page (which would disable its daily ISR and harm caching/SEO).
+  if (pathname.startsWith('/business/')) {
+    const verdict = await rateLimitAsync(`business-details:${clientIp(request)}`, 30, 60_000);
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        { error: verdict.unavailable ? 'Request protection is unavailable.' : 'Too many business requests.' },
+        {
+          status: verdict.unavailable ? 503 : 429,
+          headers: { 'Retry-After': '60', 'Cache-Control': 'no-store' },
+        }
+      );
+    }
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/business/:path*'],
 };

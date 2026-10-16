@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit, clientIp } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp, enforceGooglePlacesDailyLimit } from '@/lib/ratelimit';
 import { isSupabaseConfigured, sbSelect, sbUpsert } from '@/lib/supabase';
 import { geocodeZip } from '@/lib/locationIntent';
 
@@ -155,9 +155,10 @@ async function zipSuggestion(zip: string, apiKey: string): Promise<Suggestion[]>
 }
 
 export async function GET(req: NextRequest) {
-  const { allowed } = rateLimit(`location-autocomplete:${clientIp(req)}`, 40, 60_000);
+  const verdict = await rateLimitAsync(`location-autocomplete:${clientIp(req)}`, 40, 60_000);
+  const { allowed } = verdict;
   if (!allowed) {
-    return NextResponse.json([], { status: 429 });
+    return NextResponse.json([], { status: verdict.unavailable ? 503 : 429 });
   }
 
   const raw = req.nextUrl.searchParams.get('q') ?? '';
@@ -194,6 +195,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const budget = await enforceGooglePlacesDailyLimit();
+    if (!budget.allowed) return NextResponse.json([], { status: budget.unavailable ? 503 : 429 });
     const res = await fetch(AUTOCOMPLETE_URL, {
       method: 'POST',
       headers: {

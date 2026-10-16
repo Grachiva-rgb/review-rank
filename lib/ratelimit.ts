@@ -6,12 +6,11 @@
  * That is enough to stop casual abuse, accidental client loops, and naive
  * scrapers.
  *
- * It is NOT enough to bound spend on a paid upstream API against a determined
- * attacker, because instance count grows with the attack. Anything that must be
- * bounded in dollars needs two things this file cannot provide: a distributed
- * limiter (@upstash/ratelimit) and a hard spend ceiling configured at the
- * provider (Google Cloud quota + budget cap).
+ * RATE_LIMIT_BACKEND=supabase opts into a database-backed shared fixed-window
+ * limiter. The default remains the established local sliding-window behavior.
  */
+
+import { sharedGooglePlacesDailyLimit, sharedRateLimit } from './sharedRateLimit';
 
 interface Entry {
   /** Request timestamps inside the window, oldest first. */
@@ -24,6 +23,12 @@ const store = new Map<string, Entry>();
 let lastCleanup = Date.now();
 
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+function backendMode(): 'local' | 'supabase' | 'invalid' {
+  const backend = process.env.RATE_LIMIT_BACKEND;
+  if (backend === undefined || backend === '' || backend === 'local') return 'local';
+  return backend === 'supabase' ? 'supabase' : 'invalid';
+}
 
 /**
  * Ceiling on distinct keys held in memory.
@@ -102,6 +107,33 @@ export function rateLimit(
   valid.push(now);
   store.set(key, { ts: valid, windowMs });
   return { allowed: true };
+}
+
+export async function rateLimitAsync(
+  key: string,
+  limit: number,
+  windowMs: number
+): Promise<{ allowed: boolean; unavailable?: boolean }> {
+  const backend = backendMode();
+  if (backend === 'invalid') return { allowed: false, unavailable: true };
+  if (backend === 'local') {
+    return rateLimit(key, limit, windowMs);
+  }
+  return sharedRateLimit(key, limit, windowMs);
+}
+
+/**
+ * Aggregate call-count gate for Places APIs only (search/details/autocomplete),
+ * not the separate Google Geocoding endpoints.
+ */
+export async function enforceGooglePlacesDailyLimit(): Promise<{
+  allowed: boolean;
+  unavailable?: boolean;
+}> {
+  const backend = backendMode();
+  if (backend === 'invalid') return { allowed: false, unavailable: true };
+  if (backend === 'local') return { allowed: true };
+  return sharedGooglePlacesDailyLimit();
 }
 
 /**

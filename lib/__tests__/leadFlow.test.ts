@@ -13,7 +13,12 @@ vi.mock('../supabase', () => ({
 vi.mock('../leadLocation', () => ({
   LEAD_PLACE_ID_RE: /^[A-Za-z0-9_-]{10,100}$/, getCachedLeadBusiness: m.cached,
 }));
-vi.mock('../ratelimit', () => ({ rateLimit: () => ({ allowed: true }), clientIp: () => 'test' }));
+vi.mock('../ratelimit', () => ({
+  rateLimit: () => ({ allowed: true }),
+  rateLimitAsync: async () => ({ allowed: true }),
+  enforceGooglePlacesDailyLimit: async () => ({ allowed: true }),
+  clientIp: () => 'test',
+}));
 vi.mock('resend', () => ({ Resend: class { emails = { send: m.send }; } }));
 
 const placeId = 'ChIJleadtest000000000000';

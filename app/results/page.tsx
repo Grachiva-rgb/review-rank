@@ -14,7 +14,7 @@ import {
 import ResultsClient from '@/components/ResultsClient';
 import Link from 'next/link';
 import { headers } from 'next/headers';
-import { rateLimit, ipFromHeaders } from '@/lib/ratelimit';
+import { rateLimitAsync, ipFromHeaders } from '@/lib/ratelimit';
 
 interface ResultsPageProps {
   searchParams: Promise<{
@@ -64,11 +64,10 @@ export default async function ResultsPage({ searchParams }: ResultsPageProps) {
   // throttled this path: it was the cheapest unauthenticated way to spend money
   // in this codebase, and unlike /api/places it had no limiter at all.
   //
-  // Note what this does and does not do: the limiter is per-instance (see
-  // lib/ratelimit.ts), so this raises the cost of an attack without bounding it.
-  // The control that actually bounds spend is a Google Cloud quota + budget cap.
+  // The default limiter is per-instance. RATE_LIMIT_BACKEND=supabase switches
+  // to shared fixed-window enforcement; Google's call cap remains separate.
   const requestHeaders = await headers();
-  const { allowed } = rateLimit(`results:${ipFromHeaders(requestHeaders)}`, 20, 60_000);
+  const { allowed } = await rateLimitAsync(`results:${ipFromHeaders(requestHeaders)}`, 20, 60_000);
   if (!allowed) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getPlaceDetails } from '@/lib/places';
-import { rateLimit, ipFromHeaders } from '@/lib/ratelimit';
+import { rateLimitAsync, ipFromHeaders } from '@/lib/ratelimit';
 import { PlaceDetail, TrendSignal } from '@/lib/types';
 import NavLogo from '@/components/NavLogo';
 import StarRating from '@/components/StarRating';
@@ -270,10 +270,10 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
   // (the field mask includes reviews) for arbitrary caller-chosen place IDs —
   // unique valid IDs defeat the Supabase cache, which made this the cheapest
   // unauthenticated spend path once /results got its limiter. 10/min is ample
-  // for humans comparing businesses. Per-instance limiter; the hard spend
-  // ceiling remains the Google Cloud quota cap.
+  // for humans comparing businesses. RATE_LIMIT_BACKEND=supabase switches the
+  // default per-instance limiter to the shared fixed-window RPC.
   const requestHeaders = await headers();
-  const { allowed } = rateLimit(`compare:${ipFromHeaders(requestHeaders)}`, 10, 60_000);
+  const { allowed } = await rateLimitAsync(`compare:${ipFromHeaders(requestHeaders)}`, 10, 60_000);
   if (!allowed) {
     return (
       <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center px-4">
