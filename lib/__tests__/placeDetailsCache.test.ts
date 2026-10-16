@@ -7,7 +7,7 @@ const {
   sbUpsertMock,
   getCachedTAEnrichmentMock,
   rateLimitMock,
-  enforceGooglePlacesDailyLimitMock,
+  enforceGoogleApiDailyLimitMock,
   clientIpMock,
 } = vi.hoisted(() => ({
   isSupabaseConfiguredMock: vi.fn(),
@@ -15,7 +15,7 @@ const {
   sbUpsertMock: vi.fn(),
   getCachedTAEnrichmentMock: vi.fn(),
   rateLimitMock: vi.fn(),
-  enforceGooglePlacesDailyLimitMock: vi.fn(),
+  enforceGoogleApiDailyLimitMock: vi.fn(),
   clientIpMock: vi.fn(),
 }));
 
@@ -33,7 +33,8 @@ vi.mock('../tripadvisor', async (importOriginal) => ({
 vi.mock('../ratelimit', () => ({
   rateLimit: rateLimitMock,
   rateLimitAsync: rateLimitMock,
-  enforceGooglePlacesDailyLimit: enforceGooglePlacesDailyLimitMock,
+  enforceGoogleApiDailyLimit: enforceGoogleApiDailyLimitMock,
+  enforceGooglePlacesDailyLimit: enforceGoogleApiDailyLimitMock,
   clientIp: clientIpMock,
 }));
 
@@ -72,7 +73,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://supabase.example.invalid');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-test-placeholder');
   rateLimitMock.mockReset().mockReturnValue({ allowed: true });
-  enforceGooglePlacesDailyLimitMock.mockReset().mockResolvedValue({ allowed: true });
+  enforceGoogleApiDailyLimitMock.mockReset().mockResolvedValue({ allowed: true });
   clientIpMock.mockReset().mockReturnValue('synthetic-test-client');
   isSupabaseConfiguredMock.mockReset().mockReturnValue(true);
   sbSelectMock.mockReset().mockResolvedValue([]);
@@ -103,7 +104,7 @@ describe('getPlaceDetails cache-only behavior', () => {
     expect(metadata.description).toContain('123 reviews');
     expect(getDetailsSpy).toHaveBeenCalledWith(ROUTE_PLACE_ID);
     expect(fetch).not.toHaveBeenCalled();
-    expect(enforceGooglePlacesDailyLimitMock).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     getDetailsSpy.mockRestore();
   });
 
@@ -125,7 +126,7 @@ describe('getPlaceDetails cache-only behavior', () => {
       user_ratings_total: 123,
     });
     expect(fetch).not.toHaveBeenCalled();
-    expect(enforceGooglePlacesDailyLimitMock).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(sbSelectMock).toHaveBeenCalledTimes(1);
     expect(sbSelectMock).toHaveBeenCalledWith(
       'search_cache',
@@ -141,7 +142,7 @@ describe('getPlaceDetails cache-only behavior', () => {
 
     expect(detail.name).toBe('Cache Test Cafe');
     expect(fetch).not.toHaveBeenCalled();
-    expect(enforceGooglePlacesDailyLimitMock).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(sbUpsertMock).not.toHaveBeenCalled();
   });
 
@@ -151,8 +152,18 @@ describe('getPlaceDetails cache-only behavior', () => {
     sbSelectMock.mockResolvedValueOnce([{ results: cachedResult }]);
 
     await expect(searchPlaces('cached query')).resolves.toEqual(cachedResult);
-    expect(enforceGooglePlacesDailyLimitMock).not.toHaveBeenCalled();
+    expect(enforceGoogleApiDailyLimitMock).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('routes uncached text searches through the search-specific budget', async () => {
+    vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
+
+    await expect(searchPlaces('uncached search query')).resolves.toEqual([]);
+
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('search');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('/places:searchText');
   });
 
   it('serves the minimal existing staging fixture without a provider key', async () => {
@@ -245,7 +256,7 @@ describe('getPlaceDetails cache-only behavior', () => {
     expect(options.headers['X-Goog-FieldMask']).toContain('id,displayName');
     expect(options.headers['X-Goog-FieldMask']).toContain('reviews');
     expect(options.next).toEqual({ revalidate: 3600 });
-    expect(enforceGooglePlacesDailyLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('details');
     expect(sbUpsertMock).toHaveBeenCalledWith(
       'search_cache',
       expect.objectContaining({
@@ -268,10 +279,10 @@ describe('getPlaceDetails cache-only behavior', () => {
 
   it('does not call Google when the shared daily cap denies a cache miss', async () => {
     vi.stubEnv('GOOGLE_PLACES_API_KEY', 'synthetic-google-key-placeholder');
-    enforceGooglePlacesDailyLimitMock.mockResolvedValueOnce({ allowed: false });
+    enforceGoogleApiDailyLimitMock.mockResolvedValueOnce({ allowed: false });
 
     await expect(getPlaceDetails(PLACE_ID)).rejects.toThrow(/daily request limit/);
-    expect(enforceGooglePlacesDailyLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceGoogleApiDailyLimitMock).toHaveBeenCalledWith('details');
     expect(fetch).not.toHaveBeenCalled();
     expect(sbUpsertMock).not.toHaveBeenCalled();
   });

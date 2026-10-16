@@ -3,6 +3,8 @@ export interface SharedRateLimitResult {
   unavailable?: boolean;
 }
 
+export type GoogleApiRequestKind = 'search' | 'details' | 'autocomplete' | 'geocoding';
+
 const RPC_TIMEOUT_MS = 1_500;
 const MAX_LIMIT = 2_147_483_647;
 const MAX_WINDOW_MS = 2_147_483_647;
@@ -113,14 +115,48 @@ export async function sharedRateLimit(
   }
 }
 
-export async function sharedGooglePlacesDailyLimit(): Promise<SharedRateLimitResult> {
-  const rawLimit = process.env.GOOGLE_PLACES_DAILY_REQUEST_LIMIT;
-  if (!rawLimit || !/^[1-9]\d*$/.test(rawLimit)) {
-    return { allowed: false, unavailable: true };
-  }
+const PER_TYPE_LIMIT_ENV: Record<GoogleApiRequestKind, string> = {
+  search: 'GOOGLE_PLACES_SEARCH_DAILY_LIMIT',
+  details: 'GOOGLE_PLACES_DETAILS_DAILY_LIMIT',
+  autocomplete: 'GOOGLE_PLACES_AUTOCOMPLETE_DAILY_LIMIT',
+  geocoding: 'GOOGLE_GEOCODING_DAILY_LIMIT',
+};
+
+function parseDailyLimit(rawLimit: string | undefined): number | null {
+  if (rawLimit === undefined || !/^[1-9]\d*$/.test(rawLimit)) return null;
   const limit = Number(rawLimit);
-  if (!Number.isSafeInteger(limit) || limit > MAX_LIMIT) {
+  return Number.isSafeInteger(limit) && limit <= MAX_LIMIT ? limit : null;
+}
+
+export async function sharedGoogleApiDailyLimit(
+  kind?: GoogleApiRequestKind
+): Promise<SharedRateLimitResult> {
+  const budgetMode = process.env.GOOGLE_API_BUDGET_MODE;
+  if (
+    budgetMode !== undefined &&
+    budgetMode !== 'combined' &&
+    budgetMode !== 'per_type'
+  ) return { allowed: false, unavailable: true };
+
+  if (kind !== undefined && !Object.prototype.hasOwnProperty.call(PER_TYPE_LIMIT_ENV, kind)) {
     return { allowed: false, unavailable: true };
   }
+
+  if (budgetMode === 'per_type') {
+    if (!kind) return { allowed: false, unavailable: true };
+    const limit = parseDailyLimit(process.env[PER_TYPE_LIMIT_ENV[kind]]);
+    if (limit === null) return { allowed: false, unavailable: true };
+    return sharedRateLimit(`google-api:daily:${kind}`, limit, 86_400_000);
+  }
+
+  const canonicalLimit = process.env.GOOGLE_API_DAILY_REQUEST_LIMIT;
+  const rawLimit = canonicalLimit === undefined
+    ? process.env.GOOGLE_PLACES_DAILY_REQUEST_LIMIT
+    : canonicalLimit;
+  const limit = parseDailyLimit(rawLimit);
+  if (limit === null) return { allowed: false, unavailable: true };
   return sharedRateLimit('google-places:daily-global-cap', limit, 86_400_000);
 }
+
+/** @deprecated Use the combined Google API budget; retained for Places callers. */
+export const sharedGooglePlacesDailyLimit = sharedGoogleApiDailyLimit;

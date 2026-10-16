@@ -10,7 +10,10 @@
  * limiter. The default remains the established local sliding-window behavior.
  */
 
-import { sharedGooglePlacesDailyLimit, sharedRateLimit } from './sharedRateLimit';
+import { sharedGoogleApiDailyLimit, sharedRateLimit } from './sharedRateLimit';
+import type { GoogleApiRequestKind } from './sharedRateLimit';
+
+export type { GoogleApiRequestKind } from './sharedRateLimit';
 
 interface Entry {
   /** Request timestamps inside the window, oldest first. */
@@ -123,17 +126,37 @@ export async function rateLimitAsync(
 }
 
 /**
- * Aggregate call-count gate for Places APIs only (search/details/autocomplete),
- * not the separate Google Geocoding endpoints.
+ * Aggregate call-count gate shared by Places and Geocoding API requests.
  */
+export async function enforceGoogleApiDailyLimit(kind?: GoogleApiRequestKind): Promise<{
+  allowed: boolean;
+  unavailable?: boolean;
+}> {
+  if (
+    kind !== undefined &&
+    !['search', 'details', 'autocomplete', 'geocoding'].includes(kind)
+  ) return { allowed: false, unavailable: true };
+  const budgetMode = process.env.GOOGLE_API_BUDGET_MODE;
+  if (
+    budgetMode !== undefined &&
+    budgetMode !== 'combined' &&
+    budgetMode !== 'per_type'
+  ) return { allowed: false, unavailable: true };
+  const backend = backendMode();
+  if (budgetMode === 'per_type' && backend !== 'supabase') {
+    return { allowed: false, unavailable: true };
+  }
+  if (backend === 'invalid') return { allowed: false, unavailable: true };
+  if (backend === 'local') return { allowed: true };
+  return sharedGoogleApiDailyLimit(kind);
+}
+
+/** @deprecated Use enforceGoogleApiDailyLimit; retained for existing Places callers. */
 export async function enforceGooglePlacesDailyLimit(): Promise<{
   allowed: boolean;
   unavailable?: boolean;
 }> {
-  const backend = backendMode();
-  if (backend === 'invalid') return { allowed: false, unavailable: true };
-  if (backend === 'local') return { allowed: true };
-  return sharedGooglePlacesDailyLimit();
+  return enforceGoogleApiDailyLimit();
 }
 
 /**

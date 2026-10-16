@@ -17,6 +17,9 @@ export async function resolvePartnerServiceCenter(
 ): Promise<Coordinates | null> {
   if (!validServiceCity(city, state)) return null;
   if (!apiKey) throw new Error('Service-area geocoding is not configured');
+  const { enforceGoogleApiDailyLimit } = await import('./ratelimit');
+  const budget = await enforceGoogleApiDailyLimit('geocoding');
+  if (!budget.allowed) throw new Error('Service-area geocoding is unavailable');
   const url = 'https://maps.googleapis.com/maps/api/geocode/json'
     + `?address=${encodeURIComponent(`${city}, ${state}`)}`
     + `&components=${encodeURIComponent(`country:US|administrative_area:${state}`)}`

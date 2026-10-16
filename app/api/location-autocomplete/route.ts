@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimitAsync, clientIp, enforceGooglePlacesDailyLimit } from '@/lib/ratelimit';
+import { rateLimitAsync, clientIp, enforceGoogleApiDailyLimit } from '@/lib/ratelimit';
 import { isSupabaseConfigured, sbSelect, sbUpsert } from '@/lib/supabase';
 import { geocodeZip } from '@/lib/locationIntent';
 
@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const budget = await enforceGooglePlacesDailyLimit();
+    const budget = await enforceGoogleApiDailyLimit('autocomplete');
     if (!budget.allowed) return NextResponse.json([], { status: budget.unavailable ? 503 : 429 });
     const res = await fetch(AUTOCOMPLETE_URL, {
       method: 'POST',

@@ -41,23 +41,45 @@ Do not treat a merged application change as completion of every infrastructure g
 4. Set `RATE_LIMIT_BACKEND=supabase` only after the migration is verified. Missing,
    errored, timed-out or malformed RPC responses deny access. Invalid backend names
    also deny access. Unset/empty/`local` retains the previous per-instance limiter.
-5. Set a positive integer `GOOGLE_PLACES_DAILY_REQUEST_LIMIT` chosen by the owner
-   from provider pricing/traffic needs. No business dollar budget is assumed here.
-   Shared mode blocks new Places fetches if this cap is missing or invalid.
-6. The global daily counter covers Places Text Search, Details and Autocomplete,
-   **not Geocoding or Tripadvisor**. It counts attempts after the persistent-cache
-   check; Next's fetch cache can still serve one of those attempts without a billed
-   upstream request. This conservative count is not an invoice meter.
+   Explicit per-type Google budgets additionally require the shared backend:
+   missing/empty/`local` backends deny Google work instead of bypassing the caps.
+5. Choose a Google budget mode explicitly for production. With
+   `GOOGLE_API_BUDGET_MODE=per_type`, set positive integers in all four settings:
+   `GOOGLE_PLACES_SEARCH_DAILY_LIMIT`, `GOOGLE_PLACES_DETAILS_DAILY_LIMIT`,
+   `GOOGLE_PLACES_AUTOCOMPLETE_DAILY_LIMIT`, and `GOOGLE_GEOCODING_DAILY_LIMIT`.
+   Each request type shares its own atomic UTC-day allowance across instances and
+   users. Missing/invalid limits or unknown modes deny new Google work.
+   With mode unset or `combined`, the single allowance comes from
+   `GOOGLE_API_DAILY_REQUEST_LIMIT`, or the legacy
+   `GOOGLE_PLACES_DAILY_REQUEST_LIMIT` only when the canonical setting is absent.
+   An explicitly empty/malformed canonical setting never falls back.
+6. Both modes cover Places Text Search, Details, Autocomplete and all app
+   Geocoding helpers, including ZIP suggestions and partner-center resolution.
+   Google work performed while matching TripAdvisor records consumes the relevant
+   Google allowance; TripAdvisor's own API charges are separate.
+   Attempts are reserved after applicable persistent-cache checks. Next's fetch
+   cache can still serve a reserved attempt without a billed upstream request.
+   This conservative count is not an invoice meter. Search-page geocoding precedes
+   the Places cache lookup, so exhausting geocoding can also affect cached-search
+   flows; do not promise universal cache-only operation at quota exhaustion.
 7. Preserve all existing cache keys, TTLs, field masks and freshness checks.
-   Persistent cache hits do not consume the global Places counter. Set provider-side
+   Persistent cache hits do not consume their Google request-type counter. Set provider-side
    API restrictions and quotas as independent controls; budget alerts alone do not
    cap spend, and per-request SKU prices differ.
+   Standalone operator backfills must load the same shared-backend, project and
+   budget configuration as production. `--apply` rejects local/unset backends;
+   dry-run remains provider-free. Do not run a backfill as a release test.
 8. Check rejected requests, cache hits, shared failure behavior and representative
    request latency in staging. Do not run valid quotes, payments, emails or paid
    cold searches without specific approval.
 9. Request approval for the tested production release, additive migration and
    environment activation. Deployment on `fix/production-security-hardening` is
    disabled until preview isolation is intentionally configured.
+
+Switching between combined and per-type modes changes bucket identities and can
+start a new allowance. Coordinate policy transitions and secret rotations with
+existing usage and independent provider quotas; do not use a mode switch to reset
+an exhausted budget. Per-type policy changes retain the same type/window key.
 
 ## Repository and secret controls
 

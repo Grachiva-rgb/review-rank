@@ -5,7 +5,7 @@ import { getCachedTAEnrichment } from './tripadvisor';
 import { getConfidence } from './scoreBands';
 import { computeMultiSourceScore } from './multiSourceScoring';
 import { isSupabaseConfigured, sbUpsert, sbSelect } from './supabase';
-import { enforceGooglePlacesDailyLimit } from './ratelimit';
+import { enforceGoogleApiDailyLimit } from './ratelimit';
 
 type RawPlacesReview = {
   text?: { text?: string };
@@ -224,7 +224,7 @@ export async function searchPlaces(query: string, options?: SearchOptions): Prom
 
   // Supabase's existing cache is checked above; this conservative gate runs
   // after its miss and before fetch. Next's fetch cache may still satisfy it.
-  const requestBudget = await enforceGooglePlacesDailyLimit();
+  const requestBudget = await enforceGoogleApiDailyLimit('search');
   if (!requestBudget.allowed) {
     throw new Error(
       requestBudget.unavailable
@@ -459,7 +459,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetail> {
       throw new Error('GOOGLE_PLACES_API_KEY is not configured. Add it to your .env.local file.');
     }
 
-    const requestBudget = await enforceGooglePlacesDailyLimit();
+    const requestBudget = await enforceGoogleApiDailyLimit('details');
     if (!requestBudget.allowed) {
       throw new Error(
         requestBudget.unavailable

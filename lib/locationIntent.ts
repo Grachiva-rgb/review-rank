@@ -119,6 +119,10 @@ export async function geocodeCityState(
   apiKey: string
 ): Promise<ZipCenter | null> {
   try {
+    const { enforceGoogleApiDailyLimit } = await import('./ratelimit');
+    const budget = await enforceGoogleApiDailyLimit('geocoding');
+    if (!budget.allowed) return null;
+
     const address = `${city}, ${state}`;
     const url =
       `https://maps.googleapis.com/maps/api/geocode/json` +
@@ -219,6 +223,10 @@ export async function geocodeLocationString(
   apiKey: string
 ): Promise<ZipCenter | null> {
   try {
+    const { enforceGoogleApiDailyLimit } = await import('./ratelimit');
+    const budget = await enforceGoogleApiDailyLimit('geocoding');
+    if (!budget.allowed) return null;
+
     const url =
       `https://maps.googleapis.com/maps/api/geocode/json` +
       `?address=${encodeURIComponent(location)}` +
@@ -251,6 +259,10 @@ export async function geocodeZip(
   apiKey: string
 ): Promise<ZipCenter | null> {
   try {
+    const { enforceGoogleApiDailyLimit } = await import('./ratelimit');
+    const budget = await enforceGoogleApiDailyLimit('geocoding');
+    if (!budget.allowed) return null;
+
     const url =
       `https://maps.googleapis.com/maps/api/geocode/json` +
       `?address=${encodeURIComponent(zip)}&components=country:US&key=${encodeURIComponent(apiKey)}`;
